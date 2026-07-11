@@ -182,6 +182,7 @@ No free-form parsing; the schema is the contract.
 | M5 | ✅ Regions + hard placements (spatial prompts like "in the middle") — in the SceneSpec schema and compiler, verified by the smoke test |
 | M6 | ✅ Export: PNG + JSON + Tiled CSV — verified against a real solved scene in-browser (full Tiles→Rules→Generate→Export chain) |
 | M7 | ✅ Contradiction UX (partial-fill preview + red stuck-cell marker + root-cause "no adjacency rules" warnings + fix suggestions), seed control + Reroll (re-solve, no LLM), project save/load (one-file `.dm.json` + localStorage autosave) — browser-verified |
+| M8 | ⬜ Multiple layers. Model as N independent layers (e.g. `ground`, `objects`, `overlay`), each with its own tile subset + adjacency, solved separately; base layers via WFC, sparse object layers as weighted/hard placements on top. `SceneSpec` regions/placements gain a `layer` field; export composites layers to PNG and emits a layered Tiled `.tmx`. Additive — slots onto the existing SceneSpec/solver without rework. Not started. |
 
 ---
 
