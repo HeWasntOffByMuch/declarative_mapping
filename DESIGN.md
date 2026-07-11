@@ -29,8 +29,9 @@ and the system solves for a concrete map.
 
 ## 2. Architecture
 
-Thin-backend full-stack app. The backend exists mainly to keep the Anthropic
-key out of the browser and sidestep CORS.
+Local-backend full-stack app. The backend exists to run the Claude call on a
+machine where Claude Code is logged in (so the subscription covers it) and to
+sidestep browser CORS.
 
 ```
 ┌──────────────────────────── Browser (React + Canvas) ────────────────────────────┐
@@ -40,9 +41,11 @@ key out of the browser and sidestep CORS.
 └───────────────┬──────────────────────────────────────────────────┬──────────────┘
                 │  POST /api/generate-spec { prompt, tileCatalog }   │
                 ▼                                                    │
-┌──────────── Backend proxy (serverless fn) ────────────┐           │
-│  holds ANTHROPIC_API_KEY                               │           │
-│  calls Claude with tool-use → validated SceneSpec      │           │
+┌──────────── Local backend (server/, Node) ────────────┐           │
+│  provider = claude-cli (default): `claude --print`     │           │
+│    → uses your Claude Code login, no key               │           │
+│  provider = messages-api: per-request key → Messages   │           │
+│  returns validated SceneSpec                           │           │
 └───────────────────────────────────────────────────────┘           │
                                                         WFC runs client-side ◄──────┘
 ```
@@ -52,10 +55,14 @@ key out of the browser and sidestep CORS.
   Keeps generation instant and offline once a spec exists.
 - **Backend:** one endpoint (`/api/generate-spec`). Stateless. Never sees the
   tileset image — only the text catalog (labels, tags, ids).
-- **Key handling (per-user):** each user supplies their own Anthropic key. It's
-  sent over HTTPS to the proxy, forwarded on that single request, and never
-  persisted or logged. No operator-held key/secret. The proxy is purely a
-  CORS + key-hiding relay.
+- **Auth (subscription-backed default):** the backend is a small **local** Node
+  server. By default it generates the SceneSpec by shelling out to the local
+  `claude` CLI, which uses your existing Claude Code login — so a Pro/Max
+  subscription covers it and **no API key is involved**. A provider seam
+  (`server/providers.ts`) also offers a `messages-api` provider that takes a
+  per-request key (bills API credits) for anyone without a Claude Code login.
+  Because the subscription lives on an authenticated machine, this is a
+  locally-run / self-hosted tool rather than a pure public website.
 
 ---
 
@@ -146,11 +153,14 @@ No free-form parsing; the schema is the contract.
 
 ## 7. Open decisions
 
-1. ~~**Whose key?**~~ **DECIDED: per-user.** Each user pastes their own
-   Anthropic key. The backend proxy forwards it per-request and never persists
-   or logs it. Safer for the operator legally/financially. (Implication: no
-   server-held key/secret; the proxy is purely a CORS + key-hiding relay for
-   the request in flight.)
+1. ~~**Whose key?**~~ **DECIDED: use the Claude Code subscription, no key.**
+   The default `claude-cli` provider runs the SceneSpec call through your local
+   Claude Code login (subscription allowance) — no API key. The `messages-api`
+   provider (per-request key, API credits) stays available as a fallback for
+   users without Claude Code. Implication: the backend runs locally / self-hosted
+   on an authenticated machine, not as a pure public website. There is no
+   supported way to route a hosted site's traffic through a Pro/Max
+   subscription, so "public website" would fall back to the key/OAuth model.
 2. ~~**"Automapping" terminology.**~~ **DECIDED: Wave Function Collapse
    adjacency**, not Tiled's pattern-based Automapping rules.
 3. **Persistence.** Do projects save server-side (accounts) or export/import a

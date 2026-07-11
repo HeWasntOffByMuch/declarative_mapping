@@ -1,0 +1,71 @@
+:root {
+  --bg: #14161a;
+  --panel: #1c1f26;
+  --border: #2a2e37;
+  --text: #e6e8ec;
+  --muted: #8b90a0;
+  --accent: #5b8cff;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+
+header h1 { font-size: 1.25rem; margin: 0 0 0.75rem; }
+
+nav { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); }
+nav button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+
+main { padding-top: 1rem; }
+
+section h2 { margin-top: 0; }
+
+.row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+.block { display: block; margin-bottom: 1rem; }
+.block input, .block textarea { display: block; width: 100%; margin-top: 0.25rem; }
+.muted { color: var(--muted); font-size: 0.85rem; }
+
+input, textarea, select, button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+}
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+table.tiles { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+table.tiles th, table.tiles td { border: 1px solid var(--border); padding: 0.25rem 0.4rem; text-align: left; }
+table.tiles input { width: 100%; border: none; background: transparent; }
+
+.paint-grid { display: grid; gap: 1px; background: var(--border); width: max-content; padding: 1px; }
+.paint-cell {
+  width: 24px; height: 24px;
+  background: var(--panel);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; color: var(--muted);
+  cursor: pointer; user-select: none;
+}
+.paint-cell:hover { outline: 1px solid var(--accent); }
+
+.log { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; min-height: 4rem; white-space: pre-wrap; }
+.canvas-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; }
+canvas { image-rendering: pixelated; display: block; }
