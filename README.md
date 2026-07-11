@@ -46,11 +46,13 @@ npx tsx server/smoke.ts "an abandoned village with a meteor site in the middle"
 
 ## Status
 
-M0 + M4 done. In place: types, seedable WFC solver (backtracking, weights, hard
-placements — unit-tested), adjacency inference, SceneSpec compiler/validator
-with defensive coordinate normalization, canvas export, four-tab UI shell, and
-the local backend. The `claude-cli` provider generates a real SceneSpec via
-`claude --print --json-schema` (guaranteed structured output) using your Claude
-Code login — verified end-to-end by `server/smoke.ts` (prompt → spec → WFC →
-coherent map). The `messages-api` key provider is the fallback. Next: M1 (Tiles
-tab UX), M2 (paint-to-infer canvas), M6 (richer export). See `DESIGN.md`.
+M0–M6 done. In place and browser-verified end-to-end: Tiles (upload, slice,
+thumbnails, grid-overlay preview, label/tag/weight, blank auto-detection),
+Rules (canvas paint with a tile palette + adjacency inference), Generate (real
+SceneSpec via the local `claude` CLI using your Claude Code login — guaranteed
+structured output; `messages-api` key provider is the fallback), and Export
+(PNG / JSON / Tiled CSV, validated against a real solved scene). Seedable WFC
+solver with backtracking, weights, hard placements, and defensive coordinate
+normalization (unit-tested). Project save/restore: one-file `.dm.json` plus
+localStorage autosave. Next: M7 (contradiction UX for tight rulesets,
+seed/reroll controls). See `DESIGN.md`.

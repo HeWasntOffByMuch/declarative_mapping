@@ -180,7 +180,7 @@ No free-form parsing; the schema is the contract.
 | M3 | ✅ WFC solver (seedable, weighted, backtracking, hard placements) — unit-tested |
 | M4 | ✅ Local backend generates a real `SceneSpec` via `claude --print --json-schema` (subscription auth); coordinate-normalization guard; smoke-tested end-to-end |
 | M5 | ✅ Regions + hard placements (spatial prompts like "in the middle") — in the SceneSpec schema and compiler, verified by the smoke test |
-| M6 | Export: PNG + JSON + Tiled (implemented in M0; needs verification against a real solved scene) |
+| M6 | ✅ Export: PNG + JSON + Tiled CSV — verified against a real solved scene in-browser (full Tiles→Rules→Generate→Export chain) |
 | M7 | Polish: contradiction UX, seeds/reroll. Project save/load ✅ (one-file `.dm.json` export/import bundling atlas + tiles + rules + example map, plus localStorage autosave) |
 
 ---
