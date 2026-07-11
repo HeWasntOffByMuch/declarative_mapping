@@ -69,3 +69,26 @@ table.tiles input { width: 100%; border: none; background: transparent; }
 .log { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; min-height: 4rem; white-space: pre-wrap; }
 .canvas-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; }
 canvas { image-rendering: pixelated; display: block; }
+
+.thumb { image-rendering: pixelated; border: 1px solid var(--border); border-radius: 4px; background-repeat: no-repeat; }
+
+.tile-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+.tile-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.tile-card.off { opacity: 0.45; }
+.tile-card input { width: 100%; font-size: 0.8rem; }
+.tile-card-head { display: flex; align-items: flex-start; justify-content: space-between; }
+.tile-label { font-weight: 600; }
+.tile-enable input { width: auto; cursor: pointer; }

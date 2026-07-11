@@ -23,6 +23,12 @@ export interface Tile {
   description: string;
   /** Relative base frequency. 1 = neutral. Multiplied by SceneSpec weights. */
   weight: number;
+  /**
+   * Whether this tile participates in generation. Blank/unused atlas cells are
+   * auto-disabled so they never appear in a scene or in the LLM's tile list.
+   * Undefined is treated as enabled (back-compat).
+   */
+  enabled?: boolean;
   /** Source rectangle in the uploaded atlas (pixels). */
   src: { x: number; y: number; w: number; h: number };
 }

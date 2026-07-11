@@ -20,11 +20,13 @@ export function GenerateTab() {
     try {
       const summary: TileCatalogSummary = {
         tileSize: state.catalog.tileSize,
-        tiles: state.catalog.tiles.map((t) => ({
-          label: t.label,
-          tags: t.tags,
-          description: t.description,
-        })),
+        tiles: state.catalog.tiles
+          .filter((t) => t.enabled !== false)
+          .map((t) => ({
+            label: t.label,
+            tags: t.tags,
+            description: t.description,
+          })),
       };
       push("Requesting SceneSpec from Claude…");
       const { spec, warnings } = await generateSpec({

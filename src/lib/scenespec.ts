@@ -87,8 +87,11 @@ export function compile(spec: SceneSpec, catalog: TileCatalog): CompileResult {
   const cells = width * height;
   spec = normalizeCoords(spec, width, height);
 
-  // Base weights from the catalog, then global multipliers.
-  const base = catalog.tiles.map((t) => Math.max(t.weight, 0));
+  // Base weights from the catalog, then global multipliers. Disabled tiles
+  // (blank/unused cells) get weight 0 so they can never be placed.
+  const base = catalog.tiles.map((t) =>
+    t.enabled === false ? 0 : Math.max(t.weight, 0),
+  );
   const globalMul = new Array(tileCount).fill(1);
   for (const [label, mul] of Object.entries(spec.globalWeights ?? {})) {
     const id = resolve(label, "globalWeights");
