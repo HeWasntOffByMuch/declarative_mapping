@@ -25,7 +25,11 @@ export interface WfcInput {
 
 export interface WfcResult {
   ok: boolean;
-  /** Row-major grid of tile ids (length width*height) when ok. */
+  /**
+   * Row-major grid of tile ids (length width*height). On success every cell is
+   * a valid tile id. On failure this is the best partial from the last attempt:
+   * collapsed cells hold their tile id, un-collapsed cells hold -1.
+   */
   grid?: number[];
   attempts: number;
   /** Cell index where the last contradiction occurred, for diagnostics. */
@@ -41,20 +45,30 @@ const DELTA: Record<Direction, [number, number]> = {
 
 export function solve(input: WfcInput): WfcResult {
   const maxAttempts = input.maxAttempts ?? 10;
-  let lastContradiction: number | undefined;
+  let last: RunResult = { ok: false };
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = runOnce(input, input.seed + attempt * 0x9e3779b9);
     if (res.ok) return { ok: true, grid: res.grid, attempts: attempt + 1 };
-    lastContradiction = res.contradictionAt;
+    last = res;
   }
-  return { ok: false, attempts: maxAttempts, contradictionAt: lastContradiction };
+  // Return the last attempt's partial grid so callers can visualize where it
+  // got stuck rather than showing nothing.
+  return {
+    ok: false,
+    grid: last.grid,
+    attempts: maxAttempts,
+    contradictionAt: last.contradictionAt,
+  };
 }
 
-function runOnce(
-  input: WfcInput,
-  seed: number,
-): { ok: boolean; grid?: number[]; contradictionAt?: number } {
+interface RunResult {
+  ok: boolean;
+  grid?: number[];
+  contradictionAt?: number;
+}
+
+function runOnce(input: WfcInput, seed: number): RunResult {
   const { width, height, tileCount, allowed, cellWeights } = input;
   const cells = width * height;
   const rng = makeRng(seed);
@@ -73,7 +87,9 @@ function runOnce(
       for (let t = 0; t < tileCount; t++) possible[cell][t] = t === tile;
       stack.push(cell);
     }
-    if (!propagate(stack)) return { ok: false, contradictionAt: stack[0] };
+    // Capture the seed cell before propagate() drains the stack.
+    const seedCell = stack[0];
+    if (!propagate(stack)) return { ok: false, grid: snapshot(), contradictionAt: seedCell };
   }
 
   let remaining = cells - (input.fixed?.size ?? 0);
@@ -81,16 +97,16 @@ function runOnce(
   while (remaining > 0) {
     const cell = pickLowestEntropy();
     if (cell === -1) break; // all collapsed
-    if (!collapse(cell)) return { ok: false, contradictionAt: cell };
+    if (!collapse(cell)) return { ok: false, grid: snapshot(), contradictionAt: cell };
     stack.push(cell);
-    if (!propagate(stack)) return { ok: false, contradictionAt: cell };
+    if (!propagate(stack)) return { ok: false, grid: snapshot(), contradictionAt: cell };
     remaining = countRemaining();
   }
 
   const grid = new Array<number>(cells);
   for (let c = 0; c < cells; c++) {
     const t = possible[c].indexOf(true);
-    if (t === -1) return { ok: false, contradictionAt: c };
+    if (t === -1) return { ok: false, grid: snapshot(), contradictionAt: c };
     grid[c] = t;
   }
   return { ok: true, grid };
@@ -113,6 +129,13 @@ function runOnce(
     let n = 0;
     for (let c = 0; c < cells; c++) if (!isCollapsed(c)) n++;
     return n;
+  }
+
+  // Best-effort partial: collapsed cells -> tile id, everything else -> -1.
+  function snapshot(): number[] {
+    const g = new Array<number>(cells);
+    for (let c = 0; c < cells; c++) g[c] = isCollapsed(c) ? possible[c].indexOf(true) : -1;
+    return g;
   }
 
   function pickLowestEntropy(): number {

@@ -2,7 +2,7 @@
 // TileCatalog into concrete WfcInput. Also validates the spec against the
 // catalog so the LLM can never reference a tile that doesn't exist.
 
-import { SceneSpec, TileCatalog, RegionShape } from "../types";
+import { DIRECTIONS, SceneSpec, TileCatalog, RegionShape } from "../types";
 import { toSolverAllowed } from "./adjacency";
 import type { WfcInput } from "../wfc/solver";
 
@@ -101,6 +101,18 @@ export function compile(spec: SceneSpec, catalog: TileCatalog): CompileResult {
   for (const label of spec.forbidden ?? []) {
     const id = resolve(label, "forbidden");
     if (id !== null) globalForbidden.add(id);
+  }
+
+  // Structural check: an enabled, non-forbidden tile with no adjacency in any
+  // direction can't legally sit anywhere — the usual cause of a failed solve.
+  for (const t of catalog.tiles) {
+    if (base[t.id] <= 0 || globalForbidden.has(t.id)) continue;
+    const adj = catalog.adjacency[t.id];
+    const hasRule = adj && DIRECTIONS.some((d) => adj[d].size > 0);
+    if (!hasRule)
+      warnings.push(
+        `tile "${t.label}" has no adjacency rules — paint it next to other tiles in the Rules tab, or it can't be placed.`,
+      );
   }
 
   // Per-cell weights start as base*global, then regions layer on top.

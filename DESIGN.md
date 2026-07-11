@@ -181,7 +181,7 @@ No free-form parsing; the schema is the contract.
 | M4 | ✅ Local backend generates a real `SceneSpec` via `claude --print --json-schema` (subscription auth); coordinate-normalization guard; smoke-tested end-to-end |
 | M5 | ✅ Regions + hard placements (spatial prompts like "in the middle") — in the SceneSpec schema and compiler, verified by the smoke test |
 | M6 | ✅ Export: PNG + JSON + Tiled CSV — verified against a real solved scene in-browser (full Tiles→Rules→Generate→Export chain) |
-| M7 | Polish: contradiction UX, seeds/reroll. Project save/load ✅ (one-file `.dm.json` export/import bundling atlas + tiles + rules + example map, plus localStorage autosave) |
+| M7 | ✅ Contradiction UX (partial-fill preview + red stuck-cell marker + root-cause "no adjacency rules" warnings + fix suggestions), seed control + Reroll (re-solve, no LLM), project save/load (one-file `.dm.json` + localStorage autosave) — browser-verified |
 
 ---
 
