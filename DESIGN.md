@@ -52,9 +52,10 @@ key out of the browser and sidestep CORS.
   Keeps generation instant and offline once a spec exists.
 - **Backend:** one endpoint (`/api/generate-spec`). Stateless. Never sees the
   tileset image — only the text catalog (labels, tags, ids).
-- **Key handling:** stored server-side as an env var/secret. The user's key is
-  submitted once over HTTPS to the backend, never embedded in client JS or
-  logged. (Decision point: per-user key vs. operator-provided key — see §7.)
+- **Key handling (per-user):** each user supplies their own Anthropic key. It's
+  sent over HTTPS to the proxy, forwarded on that single request, and never
+  persisted or logged. No operator-held key/secret. The proxy is purely a
+  CORS + key-hiding relay.
 
 ---
 
@@ -145,11 +146,13 @@ No free-form parsing; the schema is the contract.
 
 ## 7. Open decisions
 
-1. **Whose key?** Per-user (each user pastes their own key; we proxy it,
-   never persist) vs. operator-provided (you pay, we rate-limit). Per-user is
-   safer for you legally/financially; operator-provided is a smoother UX.
-2. **"Automapping" terminology.** Confirm we mean WFC adjacency, not Tiled's
-   pattern-based Automapping rules — different systems.
+1. ~~**Whose key?**~~ **DECIDED: per-user.** Each user pastes their own
+   Anthropic key. The backend proxy forwards it per-request and never persists
+   or logs it. Safer for the operator legally/financially. (Implication: no
+   server-held key/secret; the proxy is purely a CORS + key-hiding relay for
+   the request in flight.)
+2. ~~**"Automapping" terminology.**~~ **DECIDED: Wave Function Collapse
+   adjacency**, not Tiled's pattern-based Automapping rules.
 3. **Persistence.** Do projects save server-side (accounts) or export/import a
    project `.json` locally? Local-first is cheaper to build.
 4. **Tileset licensing.** Uploaded art is the user's responsibility; add a
