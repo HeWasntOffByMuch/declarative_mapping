@@ -125,6 +125,10 @@ export function RulesTab() {
     );
 
   const enabled = catalog.tiles.filter((t) => t.enabled !== false);
+  // Swatches are SWATCH px but tiles are tileSize px — scale the atlas so
+  // exactly one tile fills each swatch (otherwise neighbors bleed in).
+  const SWATCH = 34;
+  const pScale = SWATCH / catalog.tileSize;
 
   return (
     <section>
@@ -150,8 +154,8 @@ export function RulesTab() {
             onClick={() => setBrush(t.id)}
             style={{
               backgroundImage: `url(${atlas.src})`,
-              backgroundPosition: `-${t.src.x}px -${t.src.y}px`,
-              backgroundSize: `${atlas.naturalWidth}px ${atlas.naturalHeight}px`,
+              backgroundPosition: `-${t.src.x * pScale}px -${t.src.y * pScale}px`,
+              backgroundSize: `${atlas.naturalWidth * pScale}px ${atlas.naturalHeight * pScale}px`,
             }}
           />
         ))}
