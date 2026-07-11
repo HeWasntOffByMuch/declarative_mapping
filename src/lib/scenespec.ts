@@ -30,6 +30,36 @@ function inShape(shape: RegionShape, u: number, v: number): boolean {
   );
 }
 
+/**
+ * The LLM is asked for normalized 0..1 coordinates, but models frequently emit
+ * absolute cell coordinates instead (e.g. cx=16 on a 32-wide map). Detect that
+ * per-shape — if any coordinate exceeds 1, treat the shape as absolute and
+ * divide x-axis fields by width, y-axis fields by height (r by width). Returns
+ * a normalized copy; leaves already-normalized specs untouched.
+ */
+function normalizeCoords(spec: SceneSpec, width: number, height: number): SceneSpec {
+  const nx = (v: number | undefined) => (v === undefined ? v : v / width);
+  const ny = (v: number | undefined) => (v === undefined ? v : v / height);
+  const looksAbsolute = (nums: Array<number | undefined>) =>
+    nums.some((n) => n !== undefined && n > 1);
+
+  const regions = spec.regions?.map((rg) => {
+    const s = rg.shape;
+    if (s.type === "circle") {
+      if (!looksAbsolute([s.cx, s.cy, s.r])) return rg;
+      return { ...rg, shape: { type: "circle" as const, cx: nx(s.cx)!, cy: ny(s.cy)!, r: nx(s.r)! } };
+    }
+    if (!looksAbsolute([s.x, s.y, s.w, s.h])) return rg;
+    return { ...rg, shape: { type: "rect" as const, x: nx(s.x)!, y: ny(s.y)!, w: nx(s.w)!, h: ny(s.h)! } };
+  });
+
+  const hardPlacements = spec.hardPlacements?.map((hp) =>
+    looksAbsolute([hp.cx, hp.cy]) ? { ...hp, cx: nx(hp.cx)!, cy: ny(hp.cy)! } : hp,
+  );
+
+  return { ...spec, regions, hardPlacements };
+}
+
 export function compile(spec: SceneSpec, catalog: TileCatalog): CompileResult {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -55,6 +85,7 @@ export function compile(spec: SceneSpec, catalog: TileCatalog): CompileResult {
 
   const { width, height } = spec;
   const cells = width * height;
+  spec = normalizeCoords(spec, width, height);
 
   // Base weights from the catalog, then global multipliers.
   const base = catalog.tiles.map((t) => Math.max(t.weight, 0));

@@ -38,14 +38,19 @@ npm install
 npm run dev:server   # backend on :8787 (uses your `claude` login)
 npm run dev          # frontend on :5173 (proxies /api → :8787)
 npm run typecheck
-npm test             # WFC + adjacency unit tests
+npm test             # WFC + adjacency + pipeline unit tests
+
+# End-to-end smoke test against the real claude CLI (prints an ASCII map):
+npx tsx server/smoke.ts "an abandoned village with a meteor site in the middle"
 ```
 
 ## Status
 
-M0 scaffold: types, seedable WFC solver (with backtracking, weights, hard
-placements — unit-tested), adjacency inference, SceneSpec compiler/validator,
-canvas export, the four-tab UI shell, and the local backend with a provider
-seam (`claude-cli` default / `messages-api` fallback) are in place. Wiring the
-providers to a real Claude call and hardening the CLI invocation is **M4** (see
-`DESIGN.md` milestones).
+M0 + M4 done. In place: types, seedable WFC solver (backtracking, weights, hard
+placements — unit-tested), adjacency inference, SceneSpec compiler/validator
+with defensive coordinate normalization, canvas export, four-tab UI shell, and
+the local backend. The `claude-cli` provider generates a real SceneSpec via
+`claude --print --json-schema` (guaranteed structured output) using your Claude
+Code login — verified end-to-end by `server/smoke.ts` (prompt → spec → WFC →
+coherent map). The `messages-api` key provider is the fallback. Next: M1 (Tiles
+tab UX), M2 (paint-to-infer canvas), M6 (richer export). See `DESIGN.md`.

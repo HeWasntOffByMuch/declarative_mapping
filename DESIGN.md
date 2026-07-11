@@ -174,13 +174,13 @@ No free-form parsing; the schema is the contract.
 
 | # | Deliverable |
 |---|---|
-| M0 | This design doc + repo scaffold (frontend + backend skeleton) |
-| M1 | Tiles tab: upload, slice, label, tag, weight |
-| M2 | Rules tab: paint example map + adjacency inference + manual override |
-| M3 | WFC solver (seedable, weighted, backtracking) — generate from a hand-built spec |
-| M4 | Backend proxy + Claude `SceneSpec` generation from a prompt |
-| M5 | Regions + hard placements (spatial prompts like "in the middle") |
-| M6 | Export: PNG + JSON + Tiled |
+| M0 | ✅ This design doc + repo scaffold (frontend + backend skeleton) |
+| M1 | Tiles tab: upload, slice, label, tag, weight (basic table shipped in M0; needs UX pass) |
+| M2 | Rules tab: paint example map + adjacency inference + manual override (coarse grid shipped in M0; needs paint canvas) |
+| M3 | ✅ WFC solver (seedable, weighted, backtracking, hard placements) — unit-tested |
+| M4 | ✅ Local backend generates a real `SceneSpec` via `claude --print --json-schema` (subscription auth); coordinate-normalization guard; smoke-tested end-to-end |
+| M5 | ✅ Regions + hard placements (spatial prompts like "in the middle") — in the SceneSpec schema and compiler, verified by the smoke test |
+| M6 | Export: PNG + JSON + Tiled (implemented in M0; needs verification against a real solved scene) |
 | M7 | Polish: contradiction UX, seeds/reroll, project save/load |
 
 ---

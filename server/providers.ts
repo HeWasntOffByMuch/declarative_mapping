@@ -31,51 +31,55 @@ function extractJson(text: string): unknown {
 }
 
 /**
- * Default provider: shells out to the local `claude` CLI in print mode. Uses
- * whatever Claude Code is logged in with on this machine — so a Pro/Max
+ * Default provider: shells out to the local `claude` CLI in print mode with a
+ * JSON schema, so the reply is guaranteed-shaped structured output. Uses
+ * whatever Claude Code is logged in with on this machine — a Pro/Max
  * subscription login covers it and no API key is needed. Requires the `claude`
- * CLI installed and authenticated (`claude` once, or `/login`).
+ * CLI installed and authenticated.
  *
- * Flags may vary by CLI version; `--print` + `--output-format json` is the
- * stable headless surface. Verify with `claude --help` if this errors.
+ * `--print --output-format json --json-schema <inline JSON>` returns a wrapper
+ * object whose `structured_output` field is the parsed SceneSpec. Override the
+ * model with SPEC_MODEL (default: the CLI's configured model).
  */
 export const claudeCliProvider: SpecProvider = {
   name: "claude-cli",
   async generate(prompt, catalog, size) {
-    const full =
-      buildPrompt(prompt, catalog, size) +
-      "\n\nRespond with ONLY a JSON object matching the SceneSpec shape. No prose, no code fence.";
-    const out = await runClaude(full);
-    return { spec: extractJson(out), warnings: [] };
+    const { SCENE_SPEC_SCHEMA } = await import("./scenespec-tool");
+    const wrapper = await runClaude(
+      buildPrompt(prompt, catalog, size),
+      JSON.stringify(SCENE_SPEC_SCHEMA),
+    );
+    // Prefer the parsed structured_output; fall back to extracting from result.
+    const spec =
+      wrapper.structured_output ??
+      (typeof wrapper.result === "string" ? extractJson(wrapper.result) : undefined);
+    if (spec === undefined) throw new Error("claude CLI returned no structured output");
+    return { spec, warnings: [] };
   },
 };
 
-function runClaude(prompt: string): Promise<string> {
+function runClaude(prompt: string, schema: string): Promise<any> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      "claude",
-      ["--print", "--output-format", "json"],
-      { stdio: ["pipe", "pipe", "pipe"] },
-    );
+    // Prompt is a positional arg (spawn uses no shell, so no quoting issues);
+    // stdin is closed so the CLI doesn't wait on it.
+    const args = ["--print", prompt, "--output-format", "json", "--json-schema", schema];
+    if (process.env.SPEC_MODEL) args.push("--model", process.env.SPEC_MODEL);
+    const child = spawn("claude", args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
     child.on("error", (e) =>
-      reject(new Error(`failed to spawn claude CLI (is it installed & logged in?): ${e.message}`)),
+      reject(new Error(`failed to spawn claude CLI (installed & logged in?): ${e.message}`)),
     );
     child.on("close", (code) => {
       if (code !== 0) return reject(new Error(`claude CLI exited ${code}: ${stderr}`));
-      // --output-format json wraps the reply; the text lives in `.result`.
       try {
-        const wrapper = JSON.parse(stdout);
-        resolve(typeof wrapper.result === "string" ? wrapper.result : stdout);
-      } catch {
-        resolve(stdout); // plain-text fallback
+        resolve(JSON.parse(stdout));
+      } catch (e) {
+        reject(new Error(`could not parse claude CLI output: ${(e as Error).message}`));
       }
     });
-    child.stdin.write(prompt);
-    child.stdin.end();
   });
 }
 
