@@ -30,43 +30,54 @@ const DELTA: Record<Direction, [number, number]> = {
   W: [-1, 0],
 };
 
+export interface Sample {
+  cells: number[]; // row-major tile values
+  width: number;
+  height: number;
+}
+
 /**
- * @param sample row-major tile values (any integers; a distinct value per tile
- *   plus a sentinel for "empty" is fine).
+ * Build one pattern model by pooling N×N patterns across several samples (the
+ * painted examples). Pattern frequency accumulates across all samples, so a
+ * shape that appears in multiple examples is weighted more heavily.
+ *
  * @param skip a value marking unpainted cells — any N×N window containing it is
- *   not extracted as a pattern. Pass a value that never appears to extract all.
+ *   not extracted. Pass a value that never appears to extract everything.
  */
 export function buildPatternModel(
-  sample: number[],
-  width: number,
-  height: number,
+  samples: Sample[],
   requestedN: number,
   skip: number,
 ): PatternModel {
-  const n = Math.max(1, Math.min(requestedN, width, height));
+  let n = requestedN;
+  for (const s of samples) n = Math.min(n, s.width, s.height);
+  n = Math.max(1, n);
+
   const keyToIndex = new Map<string, number>();
   const patterns: number[][] = [];
   const weights: number[] = [];
 
-  for (let y = 0; y + n <= height; y++) {
-    for (let x = 0; x + n <= width; x++) {
-      const p: number[] = [];
-      let ok = true;
-      for (let j = 0; j < n && ok; j++)
-        for (let i = 0; i < n; i++) {
-          const v = sample[(y + j) * width + (x + i)];
-          if (v === skip) { ok = false; break; }
-          p.push(v);
+  for (const { cells, width, height } of samples) {
+    for (let y = 0; y + n <= height; y++) {
+      for (let x = 0; x + n <= width; x++) {
+        const p: number[] = [];
+        let ok = true;
+        for (let j = 0; j < n && ok; j++)
+          for (let i = 0; i < n; i++) {
+            const v = cells[(y + j) * width + (x + i)];
+            if (v === skip) { ok = false; break; }
+            p.push(v);
+          }
+        if (!ok) continue;
+        const key = p.join(",");
+        const idx = keyToIndex.get(key);
+        if (idx === undefined) {
+          keyToIndex.set(key, patterns.length);
+          patterns.push(p);
+          weights.push(1);
+        } else {
+          weights[idx]++;
         }
-      if (!ok) continue;
-      const key = p.join(",");
-      const idx = keyToIndex.get(key);
-      if (idx === undefined) {
-        keyToIndex.set(key, patterns.length);
-        patterns.push(p);
-        weights.push(1);
-      } else {
-        weights[idx]++;
       }
     }
   }

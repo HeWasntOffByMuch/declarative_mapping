@@ -40,7 +40,8 @@ describe("generateScene — multiple layers (overlapping model)", () => {
   const spec: SceneSpec = { width: w, height: h };
 
   it("solves both layers and keeps each layer to its own tiles", () => {
-    const res = generateScene(spec, catalog(), [ground, overlay], 11);
+    const examples = [{ id: "a", name: "test", maps: [ground, overlay] }];
+    const res = generateScene(spec, catalog(), examples, 11);
     expect(res.errors).toEqual([]);
     expect(res.ok).toBe(true);
     expect(res.grid!.layers).toHaveLength(2);
@@ -53,5 +54,20 @@ describe("generateScene — multiple layers (overlapping model)", () => {
     // Overlay holds only its own tiles or empty — never a ground tile.
     expect(o.every((t) => t === -1 || t === 2 || t === 3)).toBe(true);
     expect(o.some((t) => t === -1)).toBe(true); // genuinely sparse
+  });
+
+  it("pools ground patterns across multiple examples", () => {
+    // One example is all grass, another all water → the pooled model can place
+    // either; the run must succeed and stay within the ground tile set.
+    const grassOnly = grid(8, 8, () => 0);
+    const waterOnly = grid(8, 8, () => 1);
+    const examples = [
+      { id: "a", name: "grass", maps: [grassOnly, null] },
+      { id: "b", name: "water", maps: [waterOnly, null] },
+    ];
+    const res = generateScene(spec, catalog(), examples, 3);
+    expect(res.errors).toEqual([]);
+    expect(res.ok).toBe(true);
+    expect(res.grid!.layers[0].every((t) => t === 0 || t === 1)).toBe(true);
   });
 });

@@ -3,10 +3,20 @@
 // tile's slice/label/tags/description/weight/enabled, the adjacency rules, and
 // the painted example map — so none of the manual authoring work is lost.
 
-import { Adjacency, Direction, DIRECTIONS, LayerMap, NUM_LAYERS, Tile, TileCatalog } from "../types";
+import {
+  Adjacency,
+  Direction,
+  DIRECTIONS,
+  Example,
+  LayerMap,
+  makeExample,
+  NUM_LAYERS,
+  Tile,
+  TileCatalog,
+} from "../types";
 import type { AppState } from "../store";
 
-export const PROJECT_VERSION = 2;
+export const PROJECT_VERSION = 3;
 
 export interface ProjectFile {
   version: number;
@@ -14,9 +24,11 @@ export interface ProjectFile {
   atlas: string; // data URL (image/png)
   tiles: Tile[];
   adjacency: Record<number, Record<Direction, number[]>>;
-  /** v2+: per-layer example maps. v1 had a single `exampleMap`. */
+  /** v3+: named example scenes. */
+  examples?: Example[];
+  /** v2: single per-layer maps. v1: single `exampleMap`. Both migrated. */
   exampleMaps?: Array<LayerMap | null>;
-  exampleMap?: LayerMap | null; // legacy (v1)
+  exampleMap?: LayerMap | null;
 }
 
 function atlasToDataUrl(img: HTMLImageElement): string {
@@ -59,25 +71,28 @@ export function serializeProject(state: AppState): ProjectFile | null {
     atlas: atlasToDataUrl(state.atlas),
     tiles: state.catalog.tiles,
     adjacency: serializeAdjacency(state.catalog.adjacency),
-    exampleMaps: state.exampleMaps,
+    examples: state.examples,
   };
 }
 
 export interface RestoredProject {
   atlas: HTMLImageElement;
   catalog: TileCatalog;
-  exampleMaps: AppState["exampleMaps"];
+  examples: AppState["examples"];
 }
 
-/** Read example maps from either the v2 array or the legacy v1 single map. */
-function readExampleMaps(pf: ProjectFile): Array<LayerMap | null> {
-  const out: Array<LayerMap | null> = new Array(NUM_LAYERS).fill(null);
+/** Read examples from v3, or migrate v2 (single per-layer maps) / v1 (single map). */
+function readExamples(pf: ProjectFile): Example[] {
+  if (pf.examples && pf.examples.length) return pf.examples;
+  const maps: Array<LayerMap | null> = new Array(NUM_LAYERS).fill(null);
   if (pf.exampleMaps) {
-    for (let i = 0; i < NUM_LAYERS; i++) out[i] = pf.exampleMaps[i] ?? null;
+    for (let i = 0; i < NUM_LAYERS; i++) maps[i] = pf.exampleMaps[i] ?? null;
   } else if (pf.exampleMap) {
-    out[0] = pf.exampleMap; // migrate v1 -> ground layer
+    maps[0] = pf.exampleMap;
   }
-  return out;
+  const ex = makeExample("Example 1");
+  ex.maps = maps;
+  return [ex];
 }
 
 /** Reconstruct usable state (loads the atlas image) from a ProjectFile. */
@@ -92,7 +107,7 @@ export function applyProject(pf: ProjectFile): Promise<RestoredProject> {
         tiles: pf.tiles,
         adjacency: deserializeAdjacency(pf.adjacency, pf.tiles.length),
       };
-      resolve({ atlas: img, catalog, exampleMaps: readExampleMaps(pf) });
+      resolve({ atlas: img, catalog, examples: readExamples(pf) });
     };
     img.onerror = () => reject(new Error("failed to load atlas image from project"));
     img.src = pf.atlas;

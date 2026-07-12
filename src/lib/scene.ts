@@ -9,9 +9,9 @@
 // cell's top-left tile. Patterns capture wall corners/runs/doorways that plain
 // pairwise adjacency cannot, so painted rooms come out looking like rooms.
 
-import { LayerMap, NUM_LAYERS, SceneSpec, TileCatalog } from "../types";
+import { Example, NUM_LAYERS, SceneSpec, TileCatalog } from "../types";
 import { inShape, normalizeCoords } from "./scenespec";
-import { buildPatternModel } from "./overlapping";
+import { buildPatternModel, Sample } from "./overlapping";
 import { solve, WfcInput } from "../wfc/solver";
 import type { SceneGrid } from "../store";
 
@@ -36,7 +36,7 @@ export interface SceneResult {
 export function generateScene(
   rawSpec: SceneSpec,
   catalog: TileCatalog,
-  exampleMaps: Array<LayerMap | null>,
+  examples: Example[],
   seed: number,
 ): SceneResult {
   const warnings: string[] = [];
@@ -65,28 +65,31 @@ export function generateScene(
   for (let L = 0; L < NUM_LAYERS; L++) {
     const hasEmpty = L > 0;
     const layerTiles = catalog.tiles.filter((t) => (t.layer ?? 0) === L && t.enabled !== false);
-    const map = exampleMaps[L];
+    const maps = examples.map((ex) => ex.maps[L]).filter((m): m is NonNullable<typeof m> => !!m);
 
     // Empty layers / unpainted overlay → all empty.
-    if (layerTiles.length === 0 || (!map && hasEmpty)) {
+    if (layerTiles.length === 0 || (maps.length === 0 && hasEmpty)) {
       layers.push(new Array(width * height).fill(EMPTY));
       continue;
     }
-    if (!map) {
+    if (maps.length === 0) {
       errors.push(`Paint a ${L === 0 ? "Ground" : "layer " + L} example in the Rules tab first.`);
       layers.push(new Array(width * height).fill(EMPTY));
       continue;
     }
 
-    // Build the sample: overlay's unpainted cells become EMPTY_VAL (a real
-    // value patterns can include); ground's unpainted cells are SKIP (windows
-    // touching them aren't extracted).
+    // Build samples from every example painted on this layer. Overlay's
+    // unpainted cells become EMPTY_VAL (a real value patterns can include);
+    // ground's unpainted cells are SKIP (windows touching them aren't used).
     const enabledIds = new Set(layerTiles.map((t) => t.id));
-    const sample = map.cells.map((v) => {
-      if (v < 0) return hasEmpty ? EMPTY_VAL : SKIP;
-      return enabledIds.has(v) ? v : hasEmpty ? EMPTY_VAL : SKIP; // wrong-layer paint ignored
-    });
-    const model = buildPatternModel(sample, map.width, map.height, PATTERN_N, SKIP);
+    const samples: Sample[] = maps.map((m) => ({
+      width: m.width,
+      height: m.height,
+      cells: m.cells.map((v) =>
+        v < 0 ? (hasEmpty ? EMPTY_VAL : SKIP) : enabledIds.has(v) ? v : hasEmpty ? EMPTY_VAL : SKIP,
+      ),
+    }));
+    const model = buildPatternModel(samples, PATTERN_N, SKIP);
     if (model.count === 0) {
       warnings.push(
         `${L === 0 ? "Ground" : "Overlay"}: painted example too small/empty to learn patterns (need at least a ${PATTERN_N}×${PATTERN_N} painted area).`,

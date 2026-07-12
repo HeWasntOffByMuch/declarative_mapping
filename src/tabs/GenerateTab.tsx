@@ -24,7 +24,7 @@ export function GenerateTab() {
   const solveSpec = (spec: SceneSpec, seedVal: number) => {
     if (!state.catalog) return;
     push("Solving layers with WFC…");
-    const res = generateScene(spec, state.catalog, state.exampleMaps, seedVal);
+    const res = generateScene(spec, state.catalog, state.examples, seedVal);
     res.warnings.forEach((w) => push(`⚠ ${w}`));
     if (res.errors.length || !res.grid) {
       res.errors.forEach((e) => push(`✗ ${e}`));

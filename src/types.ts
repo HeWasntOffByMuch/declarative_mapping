@@ -15,6 +15,25 @@ export interface LayerMap {
   cells: number[];
 }
 
+/**
+ * A named example scene (e.g. "dungeon", "forest"). Each holds one painted
+ * LayerMap per layer. Generation pools patterns across all examples per layer,
+ * so several small focused examples beat one big mixed canvas.
+ */
+export interface Example {
+  id: string;
+  name: string;
+  maps: Array<LayerMap | null>; // index = layer
+}
+
+export function makeExample(name: string): Example {
+  const id =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `ex_${Math.random().toString(36).slice(2)}`;
+  return { id, name, maps: new Array(NUM_LAYERS).fill(null) };
+}
+
 export const OPPOSITE: Record<Direction, Direction> = {
   N: "S",
   S: "N",
