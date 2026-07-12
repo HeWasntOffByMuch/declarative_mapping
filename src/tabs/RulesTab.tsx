@@ -73,10 +73,18 @@ export function RulesTab() {
   };
 
   const resize = (w: number, h: number) => {
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) return;
+    // Preserve the existing painting (top-left anchored) instead of clearing.
+    const { w: ow, h: oh } = dims;
+    const next = maps.map((cells) => {
+      const grid = new Array(w * h).fill(ERASE);
+      for (let y = 0; y < Math.min(h, oh); y++)
+        for (let x = 0; x < Math.min(w, ow); x++) grid[y * w + x] = cells[y * ow + x];
+      return grid;
+    });
     setDims({ w, h });
-    const next = Array.from({ length: NUM_LAYERS }, () => new Array(w * h).fill(ERASE));
     setMaps(next);
-    update({ exampleMaps: next.map((cells) => ({ width: w, height: h, cells })) });
+    update({ exampleMaps: next.map((cells) => ({ width: w, height: h, cells: cells.slice() })) });
   };
 
   const paintAt = (clientX: number, clientY: number) => {
