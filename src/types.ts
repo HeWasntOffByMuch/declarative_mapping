@@ -86,7 +86,7 @@ export interface TileCatalog {
 /** The subset of the catalog sent to the LLM (no image data). */
 export interface TileCatalogSummary {
   tileSize: number;
-  tiles: Array<Pick<Tile, "label" | "tags" | "description">>;
+  tiles: Array<Pick<Tile, "label" | "tags" | "description" | "layer">>;
 }
 
 // --- SceneSpec: the LLM's structured output, consumed by the solver ---------

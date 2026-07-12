@@ -58,7 +58,7 @@ export function GenerateTab() {
         tileSize: state.catalog.tileSize,
         tiles: state.catalog.tiles
           .filter((t) => t.enabled !== false)
-          .map((t) => ({ label: t.label, tags: t.tags, description: t.description })),
+          .map((t) => ({ label: t.label, tags: t.tags, description: t.description, layer: t.layer ?? 0 })),
       };
       push("Requesting SceneSpec from Claude…");
       const { spec, warnings } = await generateSpec({
