@@ -29,7 +29,7 @@ function permissiveCatalog(): TileCatalog {
   }
   return {
     tileSize: 16,
-    tiles: TILES.map((t, id) => ({ id, ...t, weight: 1, src: { x: 0, y: 0, w: 16, h: 16 } })),
+    tiles: TILES.map((t, id) => ({ id, sourceId: "s", ...t, weight: 1, src: { x: 0, y: 0, w: 16, h: 16 } })),
     adjacency,
   };
 }

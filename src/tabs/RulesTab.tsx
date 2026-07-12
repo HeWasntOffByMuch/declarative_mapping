@@ -25,9 +25,10 @@ export function RulesTab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const painting = useRef(false);
   const catalog = state.catalog;
-  const atlas = state.atlas;
+  const atlasById = useMemo(() => new Map(state.atlases.map((a) => [a.id, a])), [state.atlases]);
 
   const [activeId, setActiveId] = useState(() => state.examples[0]?.id);
+  const [sheetFilter, setSheetFilter] = useState<string>("");
   const active = state.examples.find((e) => e.id === activeId) ?? state.examples[0];
 
   const [dims, setDims] = useState(() => seedDims(active));
@@ -126,7 +127,7 @@ export function RulesTab() {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx || !catalog || !atlas) return;
+    if (!canvas || !ctx || !catalog || state.atlases.length === 0) return;
     canvas.width = dims.w * cellPx;
     canvas.height = dims.h * cellPx;
     ctx.imageSmoothingEnabled = false;
@@ -137,9 +138,12 @@ export function RulesTab() {
       for (let y = 0; y < dims.h; y++) {
         for (let x = 0; x < dims.w; x++) {
           const t = maps[L]?.[y * dims.w + x];
-          if (t == null || t < 0 || !catalog.tiles[t]) continue;
-          const { src } = catalog.tiles[t];
-          ctx.drawImage(atlas, src.x, src.y, src.w, src.h, x * cellPx, y * cellPx, cellPx, cellPx);
+          const tile = t != null && t >= 0 ? catalog.tiles[t] : undefined;
+          if (!tile) continue;
+          const img = atlasById.get(tile.sourceId)?.image;
+          if (!img) continue;
+          const { src } = tile;
+          ctx.drawImage(img, src.x, src.y, src.w, src.h, x * cellPx, y * cellPx, cellPx, cellPx);
         }
       }
     }
@@ -147,9 +151,9 @@ export function RulesTab() {
     ctx.strokeStyle = "rgba(255,255,255,0.06)";
     for (let y = 0; y <= dims.h; y++) { ctx.beginPath(); ctx.moveTo(0, y*cellPx+0.5); ctx.lineTo(canvas.width, y*cellPx+0.5); ctx.stroke(); }
     for (let x = 0; x <= dims.w; x++) { ctx.beginPath(); ctx.moveTo(x*cellPx+0.5, 0); ctx.lineTo(x*cellPx+0.5, canvas.height); ctx.stroke(); }
-  }, [maps, dims, cellPx, atlas, catalog, layer]);
+  }, [maps, dims, cellPx, atlasById, catalog, layer]);
 
-  if (!catalog || !atlas)
+  if (!catalog || state.atlases.length === 0)
     return (
       <section>
         <h2>Rules</h2>
@@ -157,7 +161,9 @@ export function RulesTab() {
       </section>
     );
 
-  const layerTiles = catalog.tiles.filter((t) => t.enabled !== false && (t.layer ?? 0) === layer);
+  const layerTiles = catalog.tiles.filter(
+    (t) => t.enabled !== false && (t.layer ?? 0) === layer && (!sheetFilter || t.sourceId === sheetFilter),
+  );
   const SWATCH = 34;
   const pScale = SWATCH / catalog.tileSize;
   const painted = maps[layer]?.filter((c) => c >= 0).length ?? 0;
@@ -202,21 +208,37 @@ export function RulesTab() {
         ))}
       </div>
 
+      {state.atlases.length > 1 && (
+        <div className="row" style={{ marginBottom: "0.4rem" }}>
+          <label>
+            Sheet{" "}
+            <select value={sheetFilter} onChange={(e) => setSheetFilter(e.target.value)}>
+              <option value="">All sheets</option>
+              {state.atlases.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+            </select>
+          </label>
+        </div>
+      )}
+
       <div className="palette">
         <button className={`brush-swatch${brush === ERASE ? " sel" : ""}`} title="Erase" onClick={() => setBrush(ERASE)}>⌫</button>
-        {layerTiles.map((t) => (
-          <button
-            key={t.id}
-            className={`brush-swatch${brush === t.id ? " sel" : ""}`}
-            title={t.label}
-            onClick={() => setBrush(t.id)}
-            style={{
-              backgroundImage: `url(${atlas.src})`,
-              backgroundPosition: `-${t.src.x * pScale}px -${t.src.y * pScale}px`,
-              backgroundSize: `${atlas.naturalWidth * pScale}px ${atlas.naturalHeight * pScale}px`,
-            }}
-          />
-        ))}
+        {layerTiles.map((t) => {
+          const img = atlasById.get(t.sourceId)?.image;
+          if (!img) return null;
+          return (
+            <button
+              key={t.id}
+              className={`brush-swatch${brush === t.id ? " sel" : ""}`}
+              title={t.label}
+              onClick={() => setBrush(t.id)}
+              style={{
+                backgroundImage: `url(${img.src})`,
+                backgroundPosition: `-${t.src.x * pScale}px -${t.src.y * pScale}px`,
+                backgroundSize: `${img.naturalWidth * pScale}px ${img.naturalHeight * pScale}px`,
+              }}
+            />
+          );
+        })}
         {layerTiles.length === 0 && (
           <span className="muted">No tiles on this layer (set a tile's layer in the Tiles tab).</span>
         )}

@@ -45,6 +45,8 @@ export const OPPOSITE: Record<Direction, Direction> = {
 export interface Tile {
   /** Stable internal id (index into the tile array). */
   id: number;
+  /** Which uploaded atlas this tile is sliced from. */
+  sourceId: string;
   /** Human/LLM-facing label, e.g. "water", "house_roof". Unique per catalog. */
   label: string;
   /** Free-form tags used for grouping/filtering, e.g. ["structure", "impassable"]. */

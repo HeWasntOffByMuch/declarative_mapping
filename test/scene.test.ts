@@ -16,7 +16,7 @@ function catalog(): TileCatalog {
   return {
     tileSize: 16,
     tiles: defs.map(([label, layer], id) => ({
-      id, label, layer, tags: [], description: "", weight: 1,
+      id, sourceId: "s", label, layer, tags: [], description: "", weight: 1,
       src: { x: 0, y: 0, w: 16, h: 16 },
     })),
     adjacency: emptyAdj(4),

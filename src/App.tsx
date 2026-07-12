@@ -19,7 +19,8 @@ export function App() {
   const store = useMemo(
     () => ({
       state,
-      update: (patch: Partial<AppState>) => setState((s) => ({ ...s, ...patch })),
+      update: (patch: Partial<AppState> | ((prev: AppState) => Partial<AppState>)) =>
+        setState((s) => ({ ...s, ...(typeof patch === "function" ? patch(s) : patch) })),
     }),
     [state],
   );
@@ -29,8 +30,8 @@ export function App() {
     const pf = loadAutosave();
     if (!pf) return;
     applyProject(pf)
-      .then(({ atlas, catalog, examples }) => {
-        setState((s) => ({ ...s, atlas, catalog, examples }));
+      .then(({ atlases, catalog, examples }) => {
+        setState((s) => ({ ...s, atlases, catalog, examples }));
         setStatus("Restored autosaved project");
       })
       .catch(() => {});
@@ -58,8 +59,8 @@ export function App() {
     file
       .text()
       .then((txt) => applyProject(JSON.parse(txt)))
-      .then(({ atlas, catalog, examples }) => {
-        setState((s) => ({ ...s, atlas, catalog, examples }));
+      .then(({ atlases, catalog, examples }) => {
+        setState((s) => ({ ...s, atlases, catalog, examples }));
         setStatus(`Loaded ${file.name}`);
       })
       .catch((e) => setStatus(`Load failed: ${(e as Error).message}`));

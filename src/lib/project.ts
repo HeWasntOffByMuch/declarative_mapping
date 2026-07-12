@@ -14,21 +14,28 @@ import {
   Tile,
   TileCatalog,
 } from "../types";
-import type { AppState } from "../store";
+import type { Atlas, AppState } from "../store";
 
-export const PROJECT_VERSION = 3;
+export const PROJECT_VERSION = 4;
+
+export interface SerializedAtlas {
+  id: string;
+  name: string;
+  data: string; // data URL (image/png)
+}
 
 export interface ProjectFile {
   version: number;
   tileSize: number;
-  atlas: string; // data URL (image/png)
+  /** v4+: multiple atlases. */
+  atlases?: SerializedAtlas[];
+  /** ≤v3: single atlas data URL (migrated to one atlas on load). */
+  atlas?: string;
   tiles: Tile[];
   adjacency: Record<number, Record<Direction, number[]>>;
-  /** v3+: named example scenes. */
   examples?: Example[];
-  /** v2: single per-layer maps. v1: single `exampleMap`. Both migrated. */
-  exampleMaps?: Array<LayerMap | null>;
-  exampleMap?: LayerMap | null;
+  exampleMaps?: Array<LayerMap | null>; // v2
+  exampleMap?: LayerMap | null; // v1
 }
 
 function atlasToDataUrl(img: HTMLImageElement): string {
@@ -64,11 +71,11 @@ function deserializeAdjacency(
 
 /** Build a ProjectFile from current state, or null if there's nothing to save. */
 export function serializeProject(state: AppState): ProjectFile | null {
-  if (!state.atlas || !state.catalog) return null;
+  if (state.atlases.length === 0 || !state.catalog) return null;
   return {
     version: PROJECT_VERSION,
     tileSize: state.catalog.tileSize,
-    atlas: atlasToDataUrl(state.atlas),
+    atlases: state.atlases.map((a) => ({ id: a.id, name: a.name, data: atlasToDataUrl(a.image) })),
     tiles: state.catalog.tiles,
     adjacency: serializeAdjacency(state.catalog.adjacency),
     examples: state.examples,
@@ -76,9 +83,18 @@ export function serializeProject(state: AppState): ProjectFile | null {
 }
 
 export interface RestoredProject {
-  atlas: HTMLImageElement;
+  atlases: Atlas[];
   catalog: TileCatalog;
   examples: AppState["examples"];
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("failed to load atlas image from project"));
+    img.src = dataUrl;
+  });
 }
 
 /** Read examples from v3, or migrate v2 (single per-layer maps) / v1 (single map). */
@@ -95,23 +111,33 @@ function readExamples(pf: ProjectFile): Example[] {
   return [ex];
 }
 
-/** Reconstruct usable state (loads the atlas image) from a ProjectFile. */
-export function applyProject(pf: ProjectFile): Promise<RestoredProject> {
-  return new Promise((resolve, reject) => {
-    if (pf.version > PROJECT_VERSION)
-      return reject(new Error(`project version ${pf.version} is newer than this app supports`));
-    const img = new Image();
-    img.onload = () => {
-      const catalog: TileCatalog = {
-        tileSize: pf.tileSize,
-        tiles: pf.tiles,
-        adjacency: deserializeAdjacency(pf.adjacency, pf.tiles.length),
-      };
-      resolve({ atlas: img, catalog, examples: readExamples(pf) });
-    };
-    img.onerror = () => reject(new Error("failed to load atlas image from project"));
-    img.src = pf.atlas;
-  });
+/** Reconstruct usable state (loads all atlas images) from a ProjectFile. */
+export async function applyProject(pf: ProjectFile): Promise<RestoredProject> {
+  if (pf.version > PROJECT_VERSION)
+    throw new Error(`project version ${pf.version} is newer than this app supports`);
+
+  let tiles = pf.tiles;
+  let serialized: SerializedAtlas[];
+  if (pf.atlases && pf.atlases.length) {
+    serialized = pf.atlases;
+  } else if (pf.atlas) {
+    // Migrate ≤v3 single atlas → one atlas; tiles gain its sourceId.
+    const id = "atlas_migrated";
+    serialized = [{ id, name: "tileset", data: pf.atlas }];
+    tiles = tiles.map((t) => ({ ...t, sourceId: t.sourceId ?? id }));
+  } else {
+    throw new Error("project has no atlas");
+  }
+
+  const atlases: Atlas[] = await Promise.all(
+    serialized.map(async (a) => ({ id: a.id, name: a.name, image: await loadImage(a.data) })),
+  );
+  const catalog: TileCatalog = {
+    tileSize: pf.tileSize,
+    tiles,
+    adjacency: deserializeAdjacency(pf.adjacency, tiles.length),
+  };
+  return { atlases, catalog, examples: readExamples(pf) };
 }
 
 // --- localStorage autosave -------------------------------------------------

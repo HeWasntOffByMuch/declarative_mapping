@@ -1,22 +1,22 @@
 import { useEffect, useRef } from "react";
-import { useStore } from "../store";
+import { atlasImages, useStore } from "../store";
 import { canvasToPngBlob, downloadBlob, drawScene, gridToCsv } from "../lib/render";
 import { LAYER_NAMES } from "../types";
 
 export function ExportTab() {
   const { state } = useStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { catalog, atlas, lastGrid } = state;
+  const { catalog, atlases, lastGrid } = state;
 
   useEffect(() => {
-    if (!canvasRef.current || !catalog || !atlas || !lastGrid) return;
+    if (!canvasRef.current || !catalog || atlases.length === 0 || !lastGrid) return;
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
     const scale = 2;
     canvasRef.current.width = lastGrid.width * catalog.tileSize * scale;
     canvasRef.current.height = lastGrid.height * catalog.tileSize * scale;
-    drawScene(ctx, lastGrid.layers, lastGrid.width, lastGrid.height, catalog, atlas, scale);
-  }, [catalog, atlas, lastGrid]);
+    drawScene(ctx, lastGrid.layers, lastGrid.width, lastGrid.height, catalog, atlasImages(atlases), scale);
+  }, [catalog, atlases, lastGrid]);
 
   if (!lastGrid)
     return (

@@ -11,9 +11,16 @@ export interface SceneGrid {
   layers: number[][];
 }
 
+/** An uploaded tileset image. Tiles reference it by id via Tile.sourceId. */
+export interface Atlas {
+  id: string;
+  name: string;
+  image: HTMLImageElement;
+}
+
 export interface AppState {
-  /** The uploaded atlas image, once loaded. */
-  atlas: HTMLImageElement | null;
+  /** All uploaded tileset images; tiles across them share one catalog. */
+  atlases: Atlas[];
   catalog: TileCatalog | null;
   /** Named example scenes; each holds one painted map per layer. */
   examples: Example[];
@@ -24,7 +31,7 @@ export interface AppState {
 }
 
 export const initialState: AppState = {
-  atlas: null,
+  atlases: [],
   catalog: null,
   examples: [makeExample("Example 1")],
   lastSpec: null,
@@ -32,7 +39,11 @@ export const initialState: AppState = {
   apiKey: "",
 };
 
-export type Updater = (patch: Partial<AppState>) => void;
+/** Accepts a patch object, or a function of the latest state returning a patch
+ *  (use the function form inside async callbacks to avoid stale closures). */
+export type Updater = (
+  patch: Partial<AppState> | ((prev: AppState) => Partial<AppState>),
+) => void;
 
 export const StoreContext = createContext<{ state: AppState; update: Updater }>({
   state: initialState,
@@ -40,3 +51,8 @@ export const StoreContext = createContext<{ state: AppState; update: Updater }>(
 });
 
 export const useStore = () => useContext(StoreContext);
+
+/** sourceId -> image, for rendering tiles from whichever atlas they came from. */
+export function atlasImages(atlases: Atlas[]): Map<string, HTMLImageElement> {
+  return new Map(atlases.map((a) => [a.id, a.image]));
+}

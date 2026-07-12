@@ -36,6 +36,7 @@ describe("compile warns about tiles with no adjacency rules", () => {
       tileSize: 16,
       tiles: [0, 1].map((id) => ({
         id,
+        sourceId: "s",
         label: id === 0 ? "grass" : "lonely",
         tags: [],
         description: "",

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useStore } from "../store";
-import { Adjacency, LAYER_NAMES, Tile, TileCatalog } from "../types";
+import { Atlas, useStore } from "../store";
+import { Adjacency, LAYER_NAMES, Tile } from "../types";
+import { fuzzyMatch } from "../lib/fuzzy";
 
-// M1: upload an atlas, slice it on a fixed grid, and label/tag/weight/enable
-// each tile with a live thumbnail. Blank (fully transparent) cells are
-// auto-disabled so they never leak into a generated scene.
+// Upload one or more tileset atlases (shared tile size). All tiles across all
+// sheets live in one catalog; each tile remembers its source atlas. Label /
+// tag / weight / layer / enable per tile, with a fuzzy search that dims
+// non-matching tiles. Blank (transparent) cells are auto-disabled.
 
 function emptyAdjacency(n: number): Adjacency {
   const adj: Adjacency = {};
@@ -13,32 +15,36 @@ function emptyAdjacency(n: number): Adjacency {
   return adj;
 }
 
-/** Slice the atlas and flag fully-transparent cells as disabled. */
-function sliceAtlas(img: HTMLImageElement, tileSize: number): Tile[] {
+function newId() {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `atlas_${Math.random().toString(36).slice(2)}`;
+}
+
+/** Slice one atlas into tiles (ids start at `startId`); flag transparent cells. */
+function sliceAtlas(img: HTMLImageElement, sourceId: string, tileSize: number, startId: number): Tile[] {
   const cols = Math.floor(img.naturalWidth / tileSize);
   const rows = Math.floor(img.naturalHeight / tileSize);
-
   const canvas = document.createElement("canvas");
   canvas.width = img.naturalWidth;
   canvas.height = img.naturalHeight;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx?.drawImage(img, 0, 0);
-
   const isBlank = (x: number, y: number): boolean => {
     if (!ctx) return false;
     const { data } = ctx.getImageData(x, y, tileSize, tileSize);
     for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return false;
-    return true; // every pixel fully transparent
+    return true;
   };
-
   const tiles: Tile[] = [];
-  let id = 0;
+  let id = startId;
   for (let ry = 0; ry < rows; ry++) {
     for (let rx = 0; rx < cols; rx++) {
       const x = rx * tileSize;
       const y = ry * tileSize;
       tiles.push({
         id: id++,
+        sourceId,
         label: `tile_${rx}_${ry}`,
         tags: [],
         description: "",
@@ -51,43 +57,37 @@ function sliceAtlas(img: HTMLImageElement, tileSize: number): Tile[] {
   return tiles;
 }
 
-/** Full-atlas preview with a grid overlay to confirm the tile size is right. */
-function AtlasPreview({ atlas, tileSize }: { atlas: HTMLImageElement; tileSize: number }) {
+function AtlasPreview({ atlas, tileSize }: { atlas: Atlas; tileSize: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const img = atlas.image;
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    const maxW = 460;
-    const scale = Math.max(1, Math.min(6, Math.floor(maxW / atlas.naturalWidth) || 1));
-    canvas.width = atlas.naturalWidth * scale;
-    canvas.height = atlas.naturalHeight * scale;
+    const scale = Math.max(1, Math.min(6, Math.floor(460 / img.naturalWidth) || 1));
+    canvas.width = img.naturalWidth * scale;
+    canvas.height = img.naturalHeight * scale;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(atlas, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "rgba(91,140,255,0.6)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= atlas.naturalWidth; x += tileSize) {
-      ctx.beginPath();
-      ctx.moveTo(x * scale + 0.5, 0);
-      ctx.lineTo(x * scale + 0.5, canvas.height);
-      ctx.stroke();
+    for (let x = 0; x <= img.naturalWidth; x += tileSize) {
+      ctx.beginPath(); ctx.moveTo(x * scale + 0.5, 0); ctx.lineTo(x * scale + 0.5, canvas.height); ctx.stroke();
     }
-    for (let y = 0; y <= atlas.naturalHeight; y += tileSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y * scale + 0.5);
-      ctx.lineTo(canvas.width, y * scale + 0.5);
-      ctx.stroke();
+    for (let y = 0; y <= img.naturalHeight; y += tileSize) {
+      ctx.beginPath(); ctx.moveTo(0, y * scale + 0.5); ctx.lineTo(canvas.width, y * scale + 0.5); ctx.stroke();
     }
-  }, [atlas, tileSize]);
+  }, [img, tileSize]);
   return (
-    <div className="canvas-wrap" style={{ maxWidth: 480 }}>
-      <canvas ref={ref} />
+    <div style={{ marginBottom: "0.5rem" }}>
+      <div className="muted" style={{ marginBottom: 2 }}>{atlas.name}</div>
+      <div className="canvas-wrap" style={{ maxWidth: 480, display: "inline-block" }}>
+        <canvas ref={ref} />
+      </div>
     </div>
   );
 }
 
-/** One tile's cropped image, drawn from the atlas via CSS background. */
-function Thumb({ atlas, tile, scale }: { atlas: HTMLImageElement; tile: Tile; scale: number }) {
+function Thumb({ atlas, tile, scale }: { atlas: Atlas; tile: Tile; scale: number }) {
   const { src } = tile;
   return (
     <div
@@ -95,9 +95,9 @@ function Thumb({ atlas, tile, scale }: { atlas: HTMLImageElement; tile: Tile; sc
       style={{
         width: src.w * scale,
         height: src.h * scale,
-        backgroundImage: `url(${atlas.src})`,
+        backgroundImage: `url(${atlas.image.src})`,
         backgroundPosition: `-${src.x * scale}px -${src.y * scale}px`,
-        backgroundSize: `${atlas.naturalWidth * scale}px ${atlas.naturalHeight * scale}px`,
+        backgroundSize: `${atlas.image.naturalWidth * scale}px ${atlas.image.naturalHeight * scale}px`,
       }}
     />
   );
@@ -105,21 +105,25 @@ function Thumb({ atlas, tile, scale }: { atlas: HTMLImageElement; tile: Tile; sc
 
 export function TilesTab() {
   const { state, update } = useStore();
-  const [tileSize, setTileSize] = useState(16);
+  const [tileSize, setTileSize] = useState(() => state.catalog?.tileSize ?? 16);
+  const [query, setQuery] = useState("");
 
-  const reslice = (img: HTMLImageElement, size: number) => {
-    const tiles = sliceAtlas(img, size);
-    const catalog: TileCatalog = {
-      tileSize: size,
-      tiles,
-      adjacency: emptyAdjacency(tiles.length),
-    };
-    update({ atlas: img, catalog });
-  };
+  const atlasById = useMemo(() => new Map(state.atlases.map((a) => [a.id, a])), [state.atlases]);
 
-  const onFile = (file: File) => {
+  const addTileset = (file: File) => {
     const img = new Image();
-    img.onload = () => reslice(img, tileSize);
+    const atlas: Atlas = { id: newId(), name: file.name.replace(/\.[^.]+$/, ""), image: img };
+    img.onload = () => {
+      // Functional update: read the latest state (this runs async, after other
+      // uploads may have landed) so sheets append instead of clobbering.
+      update((s) => {
+        const size = s.catalog?.tileSize ?? tileSize;
+        const startId = s.catalog?.tiles.length ?? 0;
+        const newTiles = sliceAtlas(img, atlas.id, size, startId);
+        const tiles = [...(s.catalog?.tiles ?? []), ...newTiles];
+        return { atlases: [...s.atlases, atlas], catalog: { tileSize: size, tiles, adjacency: emptyAdjacency(tiles.length) } };
+      });
+    };
     img.src = URL.createObjectURL(file);
   };
 
@@ -128,22 +132,19 @@ export function TilesTab() {
     const tiles = state.catalog.tiles.map((t) => (t.id === id ? { ...t, ...patch } : t));
     update({ catalog: { ...state.catalog, tiles } });
   };
-
   const setAllEnabled = (enabled: boolean) => {
     if (!state.catalog) return;
-    update({
-      catalog: {
-        ...state.catalog,
-        tiles: state.catalog.tiles.map((t) => ({ ...t, enabled })),
-      },
-    });
+    update({ catalog: { ...state.catalog, tiles: state.catalog.tiles.map((t) => ({ ...t, enabled })) } });
   };
 
   const thumbScale = useMemo(
     () => Math.max(1, Math.round(40 / (state.catalog?.tileSize ?? tileSize))),
     [state.catalog, tileSize],
   );
-  const enabledCount = state.catalog?.tiles.filter((t) => t.enabled !== false).length ?? 0;
+  const tiles = state.catalog?.tiles ?? [];
+  const enabledCount = tiles.filter((t) => t.enabled !== false).length;
+  const matches = (t: Tile) =>
+    fuzzyMatch(query, `${t.label} ${t.tags.join(" ")} ${atlasById.get(t.sourceId)?.name ?? ""}`);
 
   return (
     <section>
@@ -151,95 +152,56 @@ export function TilesTab() {
       <div className="row">
         <label>
           Tile size (px){" "}
-          <input
-            type="number"
-            min={1}
-            value={tileSize}
-            onChange={(e) => setTileSize(Number(e.target.value))}
-            style={{ width: 64 }}
-          />
+          <input type="number" min={1} value={tileSize} onChange={(e) => setTileSize(Number(e.target.value))} style={{ width: 64 }} disabled={tiles.length > 0} />
         </label>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
-        />
-        {state.atlas && (
-          <button onClick={() => reslice(state.atlas!, tileSize)}>Re-slice</button>
-        )}
+        <label className="filebtn">
+          + Add tileset
+          <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && addTileset(e.target.files[0])} />
+        </label>
+        {tiles.length > 0 && <span className="muted">Tile size is fixed once tiles exist (start a new project to change it).</span>}
       </div>
 
-      {!state.atlas && <p className="muted">Upload a tileset atlas to begin.</p>}
+      {state.atlases.length === 0 && <p className="muted">Add one or more tileset atlases to begin.</p>}
 
-      {state.atlas && (
+      {state.atlases.map((a) => (
+        <AtlasPreview key={a.id} atlas={a} tileSize={state.catalog?.tileSize ?? tileSize} />
+      ))}
+
+      {tiles.length > 0 && (
         <>
-          <AtlasPreview atlas={state.atlas} tileSize={state.catalog?.tileSize ?? tileSize} />
-
-          <div className="row" style={{ marginTop: "1rem" }}>
-            <strong>
-              {enabledCount} / {state.catalog?.tiles.length ?? 0} tiles enabled
-            </strong>
+          <div className="row" style={{ marginTop: "0.75rem" }}>
+            <input placeholder="Search tiles (fuzzy: label, tags, sheet)…" value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
+            <strong>{enabledCount} / {tiles.length} enabled</strong>
             <button onClick={() => setAllEnabled(true)}>Enable all</button>
             <button onClick={() => setAllEnabled(false)}>Disable all</button>
-            <span className="muted">Blank cells are auto-disabled.</span>
           </div>
 
           <div className="tile-cards">
-            {state.catalog?.tiles.map((t) => (
-              <div key={t.id} className={`tile-card${t.enabled === false ? " off" : ""}`}>
-                <div className="tile-card-head">
-                  <Thumb atlas={state.atlas!} tile={t} scale={thumbScale} />
-                  <label className="tile-enable" title="Include in generation">
-                    <input
-                      type="checkbox"
-                      checked={t.enabled !== false}
-                      onChange={(e) => setTile(t.id, { enabled: e.target.checked })}
-                    />
-                  </label>
+            {tiles.map((t) => {
+              const atlas = atlasById.get(t.sourceId);
+              if (!atlas) return null;
+              const dim = !matches(t);
+              return (
+                <div key={t.id} className={`tile-card${t.enabled === false ? " off" : ""}`} style={dim ? { opacity: 0.15 } : undefined}>
+                  <div className="tile-card-head">
+                    <Thumb atlas={atlas} tile={t} scale={thumbScale} />
+                    <label className="tile-enable" title="Include in generation">
+                      <input type="checkbox" checked={t.enabled !== false} onChange={(e) => setTile(t.id, { enabled: e.target.checked })} />
+                    </label>
+                  </div>
+                  <input className="tile-label" value={t.label} placeholder="label" onChange={(e) => setTile(t.id, { label: e.target.value })} />
+                  <input value={t.tags.join(", ")} placeholder="tags" onChange={(e) => setTile(t.id, { tags: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+                  <div className="row" style={{ gap: "0.4rem", margin: 0 }}>
+                    <span className="muted">wt</span>
+                    <input type="number" step="0.1" value={t.weight} onChange={(e) => setTile(t.id, { weight: Number(e.target.value) })} style={{ width: 48 }} />
+                    <select value={t.layer ?? 0} title="Layer" onChange={(e) => setTile(t.id, { layer: Number(e.target.value) })}>
+                      {LAYER_NAMES.map((name, i) => (<option key={i} value={i}>{name}</option>))}
+                    </select>
+                  </div>
+                  <input value={t.description} placeholder="description (for the LLM)" onChange={(e) => setTile(t.id, { description: e.target.value })} />
                 </div>
-                <input
-                  className="tile-label"
-                  value={t.label}
-                  placeholder="label"
-                  onChange={(e) => setTile(t.id, { label: e.target.value })}
-                />
-                <input
-                  value={t.tags.join(", ")}
-                  placeholder="tags"
-                  onChange={(e) =>
-                    setTile(t.id, {
-                      tags: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                    })
-                  }
-                />
-                <div className="row" style={{ gap: "0.4rem", margin: 0 }}>
-                  <span className="muted">wt</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={t.weight}
-                    onChange={(e) => setTile(t.id, { weight: Number(e.target.value) })}
-                    style={{ width: 48 }}
-                  />
-                  <select
-                    value={t.layer ?? 0}
-                    title="Layer"
-                    onChange={(e) => setTile(t.id, { layer: Number(e.target.value) })}
-                  >
-                    {LAYER_NAMES.map((name, i) => (
-                      <option key={i} value={i}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <input
-                  value={t.description}
-                  placeholder="description (for the LLM)"
-                  onChange={(e) => setTile(t.id, { description: e.target.value })}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

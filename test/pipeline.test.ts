@@ -17,6 +17,7 @@ function permissiveCatalog(): TileCatalog {
     tileSize: 16,
     tiles: labels.map((label, id) => ({
       id,
+      sourceId: "s",
       label,
       tags: [],
       description: "",

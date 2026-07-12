@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore } from "../store";
+import { atlasImages, useStore } from "../store";
 import { generateSpec } from "../api-client";
 import { generateScene, LayerFailure } from "../lib/scene";
 import { SceneSpec, TileCatalogSummary } from "../types";
@@ -86,7 +86,7 @@ export function GenerateTab() {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx || !preview || !state.catalog || !state.atlas) return;
+    if (!canvas || !ctx || !preview || !state.catalog || state.atlases.length === 0) return;
     const { grid } = preview;
     const ts = state.catalog.tileSize;
     const cell = Math.max(4, Math.min(16, Math.floor(480 / grid.width)));
@@ -95,7 +95,7 @@ export function GenerateTab() {
     canvas.height = grid.height * cell;
     ctx.fillStyle = "#0e1013";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawScene(ctx, grid.layers, grid.width, grid.height, state.catalog, state.atlas, scale);
+    drawScene(ctx, grid.layers, grid.width, grid.height, state.catalog, atlasImages(state.atlases), scale);
     for (const f of preview.failures) {
       if (f.contradictionAt == null) continue;
       const x = (f.contradictionAt % grid.width) * cell;
@@ -104,7 +104,7 @@ export function GenerateTab() {
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
     }
-  }, [preview, state.catalog, state.atlas]);
+  }, [preview, state.catalog, state.atlases]);
 
   return (
     <section>

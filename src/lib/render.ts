@@ -2,13 +2,16 @@
 
 import { TileCatalog } from "../types";
 
+/** Resolves a tile's atlas image by its sourceId. */
+export type AtlasResolver = Map<string, CanvasImageSource>;
+
 export function drawGrid(
   ctx: CanvasRenderingContext2D,
   grid: number[],
   width: number,
   height: number,
   catalog: TileCatalog,
-  atlas: CanvasImageSource,
+  atlases: AtlasResolver,
   scale = 1,
 ): void {
   const ts = catalog.tileSize;
@@ -17,6 +20,8 @@ export function drawGrid(
     for (let x = 0; x < width; x++) {
       const tile = catalog.tiles[grid[y * width + x]];
       if (!tile) continue;
+      const atlas = atlases.get(tile.sourceId);
+      if (!atlas) continue;
       const { src } = tile;
       ctx.drawImage(
         atlas,
@@ -40,10 +45,10 @@ export function drawScene(
   width: number,
   height: number,
   catalog: TileCatalog,
-  atlas: CanvasImageSource,
+  atlases: AtlasResolver,
   scale = 1,
 ): void {
-  for (const layer of layers) drawGrid(ctx, layer, width, height, catalog, atlas, scale);
+  for (const layer of layers) drawGrid(ctx, layer, width, height, catalog, atlases, scale);
 }
 
 export async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
