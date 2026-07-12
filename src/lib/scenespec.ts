@@ -18,7 +18,7 @@ function labelToId(catalog: TileCatalog): Map<string, number> {
   return m;
 }
 
-function inShape(shape: RegionShape, u: number, v: number): boolean {
+export function inShape(shape: RegionShape, u: number, v: number): boolean {
   // u,v are normalized 0..1 cell-center coordinates.
   if (shape.type === "circle") {
     const dx = u - shape.cx;
@@ -37,7 +37,7 @@ function inShape(shape: RegionShape, u: number, v: number): boolean {
  * divide x-axis fields by width, y-axis fields by height (r by width). Returns
  * a normalized copy; leaves already-normalized specs untouched.
  */
-function normalizeCoords(spec: SceneSpec, width: number, height: number): SceneSpec {
+export function normalizeCoords(spec: SceneSpec, width: number, height: number): SceneSpec {
   const nx = (v: number | undefined) => (v === undefined ? v : v / width);
   const ny = (v: number | undefined) => (v === undefined ? v : v / height);
   const looksAbsolute = (nums: Array<number | undefined>) =>

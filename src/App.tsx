@@ -29,8 +29,8 @@ export function App() {
     const pf = loadAutosave();
     if (!pf) return;
     applyProject(pf)
-      .then(({ atlas, catalog, exampleMap }) => {
-        setState((s) => ({ ...s, atlas, catalog, exampleMap }));
+      .then(({ atlas, catalog, exampleMaps }) => {
+        setState((s) => ({ ...s, atlas, catalog, exampleMaps }));
         setStatus("Restored autosaved project");
       })
       .catch(() => {});
@@ -58,8 +58,8 @@ export function App() {
     file
       .text()
       .then((txt) => applyProject(JSON.parse(txt)))
-      .then(({ atlas, catalog, exampleMap }) => {
-        setState((s) => ({ ...s, atlas, catalog, exampleMap }));
+      .then(({ atlas, catalog, exampleMaps }) => {
+        setState((s) => ({ ...s, atlas, catalog, exampleMaps }));
         setStatus(`Loaded ${file.name}`);
       })
       .catch((e) => setStatus(`Load failed: ${(e as Error).message}`));

@@ -54,5 +54,7 @@ structured output; `messages-api` key provider is the fallback), and Export
 (PNG / JSON / Tiled CSV, validated against a real solved scene). Seedable WFC
 solver with backtracking, weights, hard placements, and defensive coordinate
 normalization (unit-tested). Project save/restore: one-file `.dm.json` plus
-localStorage autosave. Next: M7 (contradiction UX for tight rulesets,
-seed/reroll controls). See `DESIGN.md`.
+localStorage autosave. Multiple layers (Ground + Overlay): tiles are assigned
+to a layer, each layer is painted and solved independently (overlay stays
+sparse via a synthetic empty tile) and composited into the PNG, with one CSV
+exported per layer. See `DESIGN.md`.

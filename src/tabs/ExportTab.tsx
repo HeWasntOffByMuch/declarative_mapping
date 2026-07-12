@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store";
-import { canvasToPngBlob, downloadBlob, drawGrid, gridToCsv } from "../lib/render";
+import { canvasToPngBlob, downloadBlob, drawScene, gridToCsv } from "../lib/render";
+import { LAYER_NAMES } from "../types";
 
 export function ExportTab() {
   const { state } = useStore();
@@ -14,27 +15,36 @@ export function ExportTab() {
     const scale = 2;
     canvasRef.current.width = lastGrid.width * catalog.tileSize * scale;
     canvasRef.current.height = lastGrid.height * catalog.tileSize * scale;
-    drawGrid(ctx, lastGrid.cells, lastGrid.width, lastGrid.height, catalog, atlas, scale);
+    drawScene(ctx, lastGrid.layers, lastGrid.width, lastGrid.height, catalog, atlas, scale);
   }, [catalog, atlas, lastGrid]);
 
-  if (!lastGrid) return <section><h2>Export</h2><p>Generate a scene first.</p></section>;
+  if (!lastGrid)
+    return (
+      <section>
+        <h2>Export</h2>
+        <p className="muted">Generate a scene first.</p>
+      </section>
+    );
 
   const exportPng = async () => {
     if (!canvasRef.current) return;
     downloadBlob(await canvasToPngBlob(canvasRef.current), "scene.png");
   };
   const exportJson = () => {
-    const payload = { spec: state.lastSpec, grid: lastGrid };
     downloadBlob(
-      new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+      new Blob([JSON.stringify({ spec: state.lastSpec, grid: lastGrid }, null, 2)], {
+        type: "application/json",
+      }),
       "scene.json",
     );
   };
   const exportCsv = () => {
-    downloadBlob(
-      new Blob([gridToCsv(lastGrid.cells, lastGrid.width)], { type: "text/csv" }),
-      "scene.csv",
-    );
+    // One CSV layer per non-empty scene layer (Tiled imports each as a layer).
+    lastGrid.layers.forEach((cells, L) => {
+      if (cells.every((c) => c < 0)) return; // skip empty layers
+      const name = (LAYER_NAMES[L] ?? `layer${L}`).toLowerCase();
+      downloadBlob(new Blob([gridToCsv(cells, lastGrid.width)], { type: "text/csv" }), `scene-${name}.csv`);
+    });
   };
 
   return (
@@ -43,7 +53,7 @@ export function ExportTab() {
       <div className="row">
         <button onClick={exportPng}>PNG</button>
         <button onClick={exportJson}>JSON</button>
-        <button onClick={exportCsv}>Tiled CSV</button>
+        <button onClick={exportCsv}>Tiled CSV (per layer)</button>
       </div>
       <div className="canvas-wrap">
         <canvas ref={canvasRef} />

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
-import { inferAdjacency } from "../lib/adjacency";
-import { DIRECTIONS } from "../types";
+import { LAYER_NAMES, LayerMap, NUM_LAYERS } from "../types";
 
-// M2: paint a small example scene using the real tiles as a brush palette, then
-// infer adjacency rules from which tiles end up next to which. Painting on a
-// canvas (click-drag), tiles drawn straight from the atlas.
+// M8: paint an example per layer. Ground (layer 0) is the filled base; overlay
+// layers are sparse (unpainted = empty). When editing an overlay you see the
+// ground beneath for context. Painting is saved per layer; generation infers
+// each layer's adjacency from its own example.
 
 const ERASE = -1;
 
@@ -17,44 +17,66 @@ export function RulesTab() {
   const catalog = state.catalog;
   const atlas = state.atlas;
 
-  // Grid dimensions, seeded from a restored example map if present.
+  const seedMap = state.exampleMaps.find((m) => m) ?? null;
   const [dims, setDims] = useState(() => ({
-    w: state.exampleMap?.width ?? 16,
-    h: state.exampleMap?.height ?? 12,
+    w: seedMap?.width ?? 16,
+    h: seedMap?.height ?? 12,
   }));
-  const [cells, setCells] = useState<number[]>(() =>
-    state.exampleMap && state.exampleMap.width === (state.exampleMap?.width ?? 16)
-      ? state.exampleMap.cells.slice()
-      : new Array(16 * 12).fill(ERASE),
-  );
+  const [layer, setLayer] = useState(0);
   const [brush, setBrush] = useState<number>(ERASE);
+  // One painted grid per layer, kept in local state; committed to the store on
+  // each stroke end so autosave + generation see the latest.
+  const [maps, setMaps] = useState<number[][]>(() =>
+    Array.from({ length: NUM_LAYERS }, (_, L) => {
+      const m = state.exampleMaps[L];
+      return m && m.width === (seedMap?.width ?? 16) && m.height === (seedMap?.height ?? 12)
+        ? m.cells.slice()
+        : new Array((seedMap?.width ?? 16) * (seedMap?.height ?? 12)).fill(ERASE);
+    }),
+  );
 
-  // If an example map arrives later (e.g. project load), adopt it.
+  // Adopt example maps that arrive later (e.g. project load).
   useEffect(() => {
-    if (state.exampleMap) {
-      setDims({ w: state.exampleMap.width, h: state.exampleMap.height });
-      setCells(state.exampleMap.cells.slice());
-    }
+    if (!seedMap) return;
+    setDims({ w: seedMap.width, h: seedMap.height });
+    setMaps(
+      Array.from({ length: NUM_LAYERS }, (_, L) => {
+        const m = state.exampleMaps[L];
+        return m && m.width === seedMap.width && m.height === seedMap.height
+          ? m.cells.slice()
+          : new Array(seedMap.width * seedMap.height).fill(ERASE);
+      }),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.exampleMap]);
+  }, [state.exampleMaps]);
 
-  // Default the brush to the first enabled tile once a catalog exists.
   useEffect(() => {
     if (brush === ERASE && catalog) {
-      const first = catalog.tiles.find((t) => t.enabled !== false);
+      const first = catalog.tiles.find((t) => t.enabled !== false && (t.layer ?? 0) === layer);
       if (first) setBrush(first.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog]);
+  }, [catalog, layer]);
 
   const cellPx = useMemo(() => {
     const ts = catalog?.tileSize ?? 16;
     return ts * Math.max(1, Math.round(28 / ts));
   }, [catalog]);
 
+  const commit = (nextMaps: number[][]) => {
+    const exampleMaps: Array<LayerMap | null> = nextMaps.map((cells) => ({
+      width: dims.w,
+      height: dims.h,
+      cells: cells.slice(),
+    }));
+    update({ exampleMaps });
+  };
+
   const resize = (w: number, h: number) => {
     setDims({ w, h });
-    setCells(new Array(w * h).fill(ERASE));
+    const next = Array.from({ length: NUM_LAYERS }, () => new Array(w * h).fill(ERASE));
+    setMaps(next);
+    update({ exampleMaps: next.map((cells) => ({ width: w, height: h, cells })) });
   };
 
   const paintAt = (clientX: number, clientY: number) => {
@@ -64,57 +86,46 @@ export function RulesTab() {
     const x = Math.floor((clientX - rect.left) / cellPx);
     const y = Math.floor((clientY - rect.top) / cellPx);
     if (x < 0 || y < 0 || x >= dims.w || y >= dims.h) return;
-    setCells((c) => {
+    setMaps((m) => {
       const i = y * dims.w + x;
-      if (c[i] === brush) return c;
-      const next = c.slice();
-      next[i] = brush;
+      if (m[layer][i] === brush) return m;
+      const next = m.map((c, L) => (L === layer ? c.slice() : c));
+      next[layer][i] = brush;
       return next;
     });
   };
 
-  // Redraw whenever the painted grid changes.
+  // Redraw: ground (context) then the active overlay on top; active-layer cells
+  // draw at full strength, lower layers dimmed when editing above them.
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx || !catalog) return;
+    if (!canvas || !ctx || !catalog || !atlas) return;
     canvas.width = dims.w * cellPx;
     canvas.height = dims.h * cellPx;
     ctx.imageSmoothingEnabled = false;
-    for (let y = 0; y < dims.h; y++) {
-      for (let x = 0; x < dims.w; x++) {
-        const px = x * cellPx;
-        const py = y * cellPx;
-        const t = cells[y * dims.w + x];
-        if (t >= 0 && atlas && catalog.tiles[t]) {
+    ctx.fillStyle = "#181b21";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (let L = 0; L <= layer; L++) {
+      ctx.globalAlpha = L === layer ? 1 : 0.4;
+      for (let y = 0; y < dims.h; y++) {
+        for (let x = 0; x < dims.w; x++) {
+          const t = maps[L][y * dims.w + x];
+          if (t < 0 || !catalog.tiles[t]) continue;
           const { src } = catalog.tiles[t];
-          ctx.drawImage(atlas, src.x, src.y, src.w, src.h, px, py, cellPx, cellPx);
-        } else {
-          ctx.fillStyle = "#181b21";
-          ctx.fillRect(px, py, cellPx, cellPx);
+          ctx.drawImage(atlas, src.x, src.y, src.w, src.h, x * cellPx, y * cellPx, cellPx, cellPx);
         }
-        ctx.strokeStyle = "rgba(255,255,255,0.06)";
-        ctx.strokeRect(px + 0.5, py + 0.5, cellPx, cellPx);
       }
     }
-  }, [cells, dims, cellPx, atlas, catalog]);
-
-  const ruleCount = useMemo(() => {
-    if (!catalog) return 0;
-    let n = 0;
-    for (const t of Object.keys(catalog.adjacency))
-      for (const d of DIRECTIONS) n += catalog.adjacency[+t][d].size;
-    return n;
-  }, [catalog]);
-
-  const runInference = () => {
-    if (!catalog) return;
-    const adjacency = inferAdjacency(cells, dims.w, dims.h, catalog.tiles.length);
-    update({
-      catalog: { ...catalog, adjacency },
-      exampleMap: { width: dims.w, height: dims.h, cells: cells.slice() },
-    });
-  };
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    for (let y = 0; y <= dims.h; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * cellPx + 0.5); ctx.lineTo(canvas.width, y * cellPx + 0.5); ctx.stroke();
+    }
+    for (let x = 0; x <= dims.w; x++) {
+      ctx.beginPath(); ctx.moveTo(x * cellPx + 0.5, 0); ctx.lineTo(x * cellPx + 0.5, canvas.height); ctx.stroke();
+    }
+  }, [maps, dims, cellPx, atlas, catalog, layer]);
 
   if (!catalog || !atlas)
     return (
@@ -124,19 +135,34 @@ export function RulesTab() {
       </section>
     );
 
-  const enabled = catalog.tiles.filter((t) => t.enabled !== false);
-  // Swatches are SWATCH px but tiles are tileSize px — scale the atlas so
-  // exactly one tile fills each swatch (otherwise neighbors bleed in).
+  const layerTiles = catalog.tiles.filter((t) => t.enabled !== false && (t.layer ?? 0) === layer);
   const SWATCH = 34;
   const pScale = SWATCH / catalog.tileSize;
+  const painted = maps[layer].filter((c) => c >= 0).length;
 
   return (
     <section>
       <h2>Rules</h2>
       <p className="muted">
-        Paint an example scene; adjacency is inferred from which tiles you place
-        next to which. Then hit <em>Infer adjacency</em>.
+        Paint an example per layer. Ground fills every cell; overlay is sparse
+        (leave gaps — they mean "empty"). Editing an overlay shows the ground
+        beneath for context.
       </p>
+
+      <div className="palette" style={{ marginBottom: "0.5rem" }}>
+        {LAYER_NAMES.map((name, i) => (
+          <button
+            key={i}
+            className={`layer-tab${layer === i ? " sel" : ""}`}
+            onClick={() => {
+              setLayer(i);
+              setBrush(ERASE);
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
 
       <div className="palette">
         <button
@@ -146,7 +172,7 @@ export function RulesTab() {
         >
           ⌫
         </button>
-        {enabled.map((t) => (
+        {layerTiles.map((t) => (
           <button
             key={t.id}
             className={`brush-swatch${brush === t.id ? " sel" : ""}`}
@@ -159,36 +185,24 @@ export function RulesTab() {
             }}
           />
         ))}
+        {layerTiles.length === 0 && (
+          <span className="muted">No tiles assigned to this layer (set a tile's layer in the Tiles tab).</span>
+        )}
       </div>
 
       <div className="row">
-        <label>
-          W{" "}
-          <input
-            type="number"
-            min={2}
-            max={64}
-            value={dims.w}
-            onChange={(e) => resize(Number(e.target.value), dims.h)}
-            style={{ width: 56 }}
-          />
-        </label>
-        <label>
-          H{" "}
-          <input
-            type="number"
-            min={2}
-            max={64}
-            value={dims.h}
-            onChange={(e) => resize(dims.w, Number(e.target.value))}
-            style={{ width: 56 }}
-          />
-        </label>
-        <button onClick={runInference}>Infer adjacency</button>
-        <button onClick={() => setCells(new Array(dims.w * dims.h).fill(ERASE))}>
-          Clear
+        <label>W <input type="number" min={2} max={64} value={dims.w} onChange={(e) => resize(Number(e.target.value), dims.h)} style={{ width: 56 }} /></label>
+        <label>H <input type="number" min={2} max={64} value={dims.h} onChange={(e) => resize(dims.w, Number(e.target.value))} style={{ width: 56 }} /></label>
+        <button
+          onClick={() => {
+            const cleared = maps.map((c, L) => (L === layer ? new Array(dims.w * dims.h).fill(ERASE) : c));
+            setMaps(cleared);
+            commit(cleared);
+          }}
+        >
+          Clear layer
         </button>
-        <span className="muted">{ruleCount} directional allowances</span>
+        <span className="muted">{painted} painted on {LAYER_NAMES[layer]}</span>
       </div>
 
       <div className="canvas-wrap" style={{ display: "inline-block" }}>
@@ -200,8 +214,14 @@ export function RulesTab() {
             paintAt(e.clientX, e.clientY);
           }}
           onMouseMove={(e) => painting.current && paintAt(e.clientX, e.clientY)}
-          onMouseUp={() => (painting.current = false)}
-          onMouseLeave={() => (painting.current = false)}
+          onMouseUp={() => {
+            painting.current = false;
+            commit(maps);
+          }}
+          onMouseLeave={() => {
+            if (painting.current) commit(maps);
+            painting.current = false;
+          }}
         />
       </div>
     </section>

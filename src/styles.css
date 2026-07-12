@@ -32,6 +32,9 @@ header h1 { font-size: 1.25rem; margin: 0; }
 }
 .brush-swatch.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
+.layer-tab { padding: 0.3rem 0.9rem; border-radius: 6px; }
+.layer-tab.sel { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent); }
+
 nav { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); }
 nav button {
   background: transparent;

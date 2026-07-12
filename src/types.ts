@@ -4,6 +4,17 @@
 export type Direction = "N" | "E" | "S" | "W";
 export const DIRECTIONS: Direction[] = ["N", "E", "S", "W"];
 
+/** Scene layers. Ground fills every cell; overlay is sparse (objects). */
+export const LAYER_NAMES = ["Ground", "Overlay"] as const;
+export const NUM_LAYERS = LAYER_NAMES.length;
+
+/** A painted example grid (row-major; -1 = unpainted). */
+export interface LayerMap {
+  width: number;
+  height: number;
+  cells: number[];
+}
+
 export const OPPOSITE: Record<Direction, Direction> = {
   N: "S",
   S: "N",
@@ -29,6 +40,11 @@ export interface Tile {
    * Undefined is treated as enabled (back-compat).
    */
   enabled?: boolean;
+  /**
+   * Which layer this tile belongs to. 0 = ground (fully filled base), 1 =
+   * overlay (objects/decoration, sparse — empty space allowed). Undefined = 0.
+   */
+  layer?: number;
   /** Source rectangle in the uploaded atlas (pixels). */
   src: { x: number; y: number; w: number; h: number };
 }

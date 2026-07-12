@@ -33,6 +33,19 @@ export function drawGrid(
   }
 }
 
+/** Composite all layers (ground first) onto the canvas; -1 cells are skipped. */
+export function drawScene(
+  ctx: CanvasRenderingContext2D,
+  layers: number[][],
+  width: number,
+  height: number,
+  catalog: TileCatalog,
+  atlas: CanvasImageSource,
+  scale = 1,
+): void {
+  for (const layer of layers) drawGrid(ctx, layer, width, height, catalog, atlas, scale);
+}
+
 export async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(

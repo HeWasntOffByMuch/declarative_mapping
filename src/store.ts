@@ -2,16 +2,23 @@
 // reducer) so M0 stays lean; swap for Zustand/Redux later if it grows.
 
 import { createContext, useContext } from "react";
-import { SceneSpec, TileCatalog } from "./types";
+import { LayerMap, NUM_LAYERS, SceneSpec, TileCatalog } from "./types";
+
+/** A generated scene: one grid of tile ids per layer (-1 = empty). */
+export interface SceneGrid {
+  width: number;
+  height: number;
+  layers: number[][];
+}
 
 export interface AppState {
   /** The uploaded atlas image, once loaded. */
   atlas: HTMLImageElement | null;
   catalog: TileCatalog | null;
-  /** Painted example map for adjacency inference (row-major, -1 = empty). */
-  exampleMap: { width: number; height: number; cells: number[] } | null;
+  /** Painted example map per layer (index = layer). */
+  exampleMaps: Array<LayerMap | null>;
   lastSpec: SceneSpec | null;
-  lastGrid: { width: number; height: number; cells: number[] } | null;
+  lastGrid: SceneGrid | null;
   /** User's Anthropic key, held in memory only (never persisted). */
   apiKey: string;
 }
@@ -19,7 +26,7 @@ export interface AppState {
 export const initialState: AppState = {
   atlas: null,
   catalog: null,
-  exampleMap: null,
+  exampleMaps: new Array(NUM_LAYERS).fill(null),
   lastSpec: null,
   lastGrid: null,
   apiKey: "",

@@ -3,10 +3,10 @@
 // tile's slice/label/tags/description/weight/enabled, the adjacency rules, and
 // the painted example map — so none of the manual authoring work is lost.
 
-import { Adjacency, Direction, DIRECTIONS, Tile, TileCatalog } from "../types";
+import { Adjacency, Direction, DIRECTIONS, LayerMap, NUM_LAYERS, Tile, TileCatalog } from "../types";
 import type { AppState } from "../store";
 
-export const PROJECT_VERSION = 1;
+export const PROJECT_VERSION = 2;
 
 export interface ProjectFile {
   version: number;
@@ -14,7 +14,9 @@ export interface ProjectFile {
   atlas: string; // data URL (image/png)
   tiles: Tile[];
   adjacency: Record<number, Record<Direction, number[]>>;
-  exampleMap: { width: number; height: number; cells: number[] } | null;
+  /** v2+: per-layer example maps. v1 had a single `exampleMap`. */
+  exampleMaps?: Array<LayerMap | null>;
+  exampleMap?: LayerMap | null; // legacy (v1)
 }
 
 function atlasToDataUrl(img: HTMLImageElement): string {
@@ -57,21 +59,32 @@ export function serializeProject(state: AppState): ProjectFile | null {
     atlas: atlasToDataUrl(state.atlas),
     tiles: state.catalog.tiles,
     adjacency: serializeAdjacency(state.catalog.adjacency),
-    exampleMap: state.exampleMap,
+    exampleMaps: state.exampleMaps,
   };
 }
 
 export interface RestoredProject {
   atlas: HTMLImageElement;
   catalog: TileCatalog;
-  exampleMap: AppState["exampleMap"];
+  exampleMaps: AppState["exampleMaps"];
+}
+
+/** Read example maps from either the v2 array or the legacy v1 single map. */
+function readExampleMaps(pf: ProjectFile): Array<LayerMap | null> {
+  const out: Array<LayerMap | null> = new Array(NUM_LAYERS).fill(null);
+  if (pf.exampleMaps) {
+    for (let i = 0; i < NUM_LAYERS; i++) out[i] = pf.exampleMaps[i] ?? null;
+  } else if (pf.exampleMap) {
+    out[0] = pf.exampleMap; // migrate v1 -> ground layer
+  }
+  return out;
 }
 
 /** Reconstruct usable state (loads the atlas image) from a ProjectFile. */
 export function applyProject(pf: ProjectFile): Promise<RestoredProject> {
   return new Promise((resolve, reject) => {
-    if (pf.version !== PROJECT_VERSION)
-      return reject(new Error(`unsupported project version ${pf.version}`));
+    if (pf.version > PROJECT_VERSION)
+      return reject(new Error(`project version ${pf.version} is newer than this app supports`));
     const img = new Image();
     img.onload = () => {
       const catalog: TileCatalog = {
@@ -79,7 +92,7 @@ export function applyProject(pf: ProjectFile): Promise<RestoredProject> {
         tiles: pf.tiles,
         adjacency: deserializeAdjacency(pf.adjacency, pf.tiles.length),
       };
-      resolve({ atlas: img, catalog, exampleMap: pf.exampleMap ?? null });
+      resolve({ atlas: img, catalog, exampleMaps: readExampleMaps(pf) });
     };
     img.onerror = () => reject(new Error("failed to load atlas image from project"));
     img.src = pf.atlas;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
-import { Adjacency, Tile, TileCatalog } from "../types";
+import { Adjacency, LAYER_NAMES, Tile, TileCatalog } from "../types";
 
 // M1: upload an atlas, slice it on a fixed grid, and label/tag/weight/enable
 // each tile with a live thumbnail. Blank (fully transparent) cells are
@@ -219,8 +219,19 @@ export function TilesTab() {
                     step="0.1"
                     value={t.weight}
                     onChange={(e) => setTile(t.id, { weight: Number(e.target.value) })}
-                    style={{ width: 56 }}
+                    style={{ width: 48 }}
                   />
+                  <select
+                    value={t.layer ?? 0}
+                    title="Layer"
+                    onChange={(e) => setTile(t.id, { layer: Number(e.target.value) })}
+                  >
+                    {LAYER_NAMES.map((name, i) => (
+                      <option key={i} value={i}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <input
                   value={t.description}
