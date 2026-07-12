@@ -23,28 +23,35 @@ function catalog(): TileCatalog {
   };
 }
 
-describe("generateScene — multiple layers", () => {
-  const w = 6, h = 4;
-  // Ground: grass/water checkerboard (both may neighbor each other).
-  const ground: LayerMap = { width: 4, height: 2, cells: [0, 1, 0, 1, 1, 0, 1, 0] };
-  // Overlay: a couple objects with empty gaps around them (id -1 = unpainted).
-  const overlay: LayerMap = { width: 4, height: 2, cells: [2, -1, 3, -1, -1, -1, -1, -1] };
+// Build a W×H example grid from a (x,y)->value function.
+function grid(w: number, h: number, f: (x: number, y: number) => number): LayerMap {
+  const cells: number[] = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) cells.push(f(x, y));
+  return { width: w, height: h, cells };
+}
+
+describe("generateScene — multiple layers (overlapping model)", () => {
+  const w = 10, h = 10;
+  // Ground: water stripe on the left, grass elsewhere (both fully painted).
+  const ground = grid(10, 10, (x) => (x < 3 ? 1 : 0));
+  // Overlay (walls): mostly empty with a solid 4×4 wall block — gives both
+  // wall patterns and a freely-tileable all-empty pattern.
+  const overlay = grid(10, 10, (x, y) => (x >= 2 && x <= 5 && y >= 2 && y <= 5 ? 2 : -1));
   const spec: SceneSpec = { width: w, height: h };
 
-  it("solves both layers and composites correctly", () => {
+  it("solves both layers and keeps each layer to its own tiles", () => {
     const res = generateScene(spec, catalog(), [ground, overlay], 11);
     expect(res.errors).toEqual([]);
     expect(res.ok).toBe(true);
     expect(res.grid!.layers).toHaveLength(2);
 
     const [g, o] = res.grid!.layers;
-    // Ground is fully filled with ground tiles only.
+    // Ground fully filled with ground tiles only.
     expect(g).toHaveLength(w * h);
     expect(g.every((t) => t === 0 || t === 1)).toBe(true);
 
-    // Overlay holds only overlay tiles or empty (-1) — never ground tiles.
+    // Overlay holds only its own tiles or empty — never a ground tile.
     expect(o.every((t) => t === -1 || t === 2 || t === 3)).toBe(true);
-    // And it is genuinely sparse (some empty cells), not fully packed.
-    expect(o.some((t) => t === -1)).toBe(true);
+    expect(o.some((t) => t === -1)).toBe(true); // genuinely sparse
   });
 });
